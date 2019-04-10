@@ -4,7 +4,14 @@ import spacy
 import torch
 
 def load_dataset(data_path, min_freq=2, batch_size=128):
-    """ Returns iterators for the training/dev dataset """
+    """
+    Returns iterators for the training/dev dataset
+
+    Arguments:
+        data_path: path of the dataset
+        min_freq: min freq. needed to include a token in the vocabulary
+        batch_size: size of the batch for BucketIterator
+    """
 
     spacy_de = spacy.load("de")
     spacy_en = spacy.load("en")
@@ -20,7 +27,7 @@ def load_dataset(data_path, min_freq=2, batch_size=128):
     TRG = Field(tokenize=tokenize_en, init_token="<BOS>", eos_token="<EOS>")
 
     train_data, dev_data = datasets.TranslationDataset.splits(exts=(".de", ".en"),
-                                                    fields=(SRC, TRG), path=data_path)
+                                    fields=(SRC, TRG), path=data_path, test=None, validation="dev")
 
     SRC.build_vocab(train_data, min_freq=min_freq)
     TRG.build_vocab(train_data, min_freq=min_freq)
