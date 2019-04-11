@@ -1,9 +1,11 @@
 import argparse
 import torch
+from torch import nn
 from torch.autograd import Variable
+from torch import optim
 from torch.nn.utils import clip_grad_norm
 from torch.nn import functional as F
-#  from model import Encoder, Decoder, Seq2Seq
+from models.Seq2SeqAttn import Encoder, Decoder, Seq2SeqAttn
 from utils import HyperParams, load_dataset, set_logger, load_checkpoint, save_checkpoint
 import os, sys
 import logging
@@ -22,26 +24,26 @@ def evaluate_model(model, dev_iter, params):
     model.eval()
     total_loss = 0
     criterion = nn.CrossEntropyLoss(ignore_index=params.pad_token)
-    for index, batch in enumerate(dev_iter):
-        src, len_src = batch.src
-        trg, len_trg = batch.trg
-        src, trg = src.tranpose(0, 1), trg.tranpose(0, 1)
+    with torch.no_grad():
+        for index, batch in enumerate(dev_iter):
+            src, trg = batch.src, batch.trg
 
-        if params.cuda:
-            src = Variable(src.data.cuda(), volatile=True)
-            trg = Variable(trg.data.cuda(), volatile=True)
-        else:
-            src = Variable(src.data, volatile=True)
-            trg = Variable(trg.data, volatile=True)
+            if params.cuda:
+                src, trg = src.cuda(), trg.cuda()
 
-        output = model(src, trg, teacher_forcing_ratio=0.0)
-        loss = criterion(output[1:].view(-1, params.vocab_size), trg[1:].contiguous().view(-1))
-        total_loss += loss
+            output = model(src, trg, tf_ratio=0.0)
+            output = output[:, :-1, :].contiguous().view(-1, params.vocab_size)
+            trg = trg[:, 1:].contiguous().view(-1)
+
+            assert output.size(0) == trg.size(0)
+
+            loss = criterion(output, trg)
+            total_loss += loss.item()
     return total_loss / len(dev_iter)
 
 def train_model(epoch_num, model, optimizer, train_iter, params):
     """
-    Train the Model for one epoch on the train set
+    Train the Model for one epoch on the training set
 
     Arguments:
         model: the neural network
@@ -54,21 +56,23 @@ def train_model(epoch_num, model, optimizer, train_iter, params):
     total_loss = 0
     criterion = nn.CrossEntropyLoss(ignore_index=params.pad_token)
     for index, batch in enumerate(train_iter):
-        src, len_src = batch.src
-        trg, len_trg = batch.trg
-        src, trg = src.tranpose(0, 1), trg.tranpose(0, 1)
+        src, trg = batch.src, batch.trg
+        len_src, len_trg = src.size(0), trg.size(0)
 
         if params.cuda:
             src, trg = src.cuda(), trg.cuda()
-        else:
-            src, trg = src, trg
 
-        output = model(src, trg, teacher_forcing_ratio=params.teacher_forcing_ratio)
+        output = model(src, trg, tf_ratio=params.teacher_forcing_ratio)
+        output = output[:, :-1, :].contiguous().view(-1, params.vocab_size)
+        trg = trg[:, 1:].contiguous().view(-1)
+
+        assert output.size(0) == trg.size(0)
 
         optimizer.zero_grad()
-        loss = criterion(output[1:].view(-1, params.vocab_size), trg[1:].contiguous().view(-1))
+        loss = criterion(output, trg)
         loss.backward()
-        clip_grad_norm(model.parameters(), params.grad_clip)
+
+        nn.utils.clip_grad_norm_(model.parameters(), params.grad_clip)
         optimizer.step()
         total_loss += loss.item()
 
@@ -97,20 +101,26 @@ def main(params, model_dir, restore_file):
     params.vocab_size = en_size
     params.pad_token = EN.vocab.stoi["<pad>"]
 
+    print(EN.vocab.stoi["<BOS>"])
+    print(EN.vocab.stoi["<EOS>"])
     # Instantiate the Seq2Seq model
-    #  encoder = Encoder(de_size, params.embed_size, params.hidden_size, n_layers=params.n_layers_enc)
-    #  decoder = Decoder(params.embed_size, params.hidden_size, en_size, n_layers=params.n_layers_dec)
-    #  seq2seq = Seq2Seq(encoder, decoder).cuda() if params.cuda else Seq2Seq(encoder, decoder)
+    encoder = Encoder(input_size=de_size, embed_size=params.embed_size,
+                      hidden_size=params.hidden_size, num_layers=params.n_layers_enc)
+    decoder = Decoder(output_size=en_size, embed_size=params.embed_size,
+                      hidden_size=params.hidden_size, num_layers=params.n_layers_dec)
+    seq2seq = Seq2SeqAttn(encoder, decoder).cuda() if params.cuda else Seq2SeqAttn(encoder, decoder)
 
     optimizer = optim.Adam(seq2seq.parameters(), lr=params.lr)
 
     if restore_file:
-        restore_path = os.path.join(args.model_dir, args.restore_file)
+        print("Restore File")
+        restore_path = os.path.join(args.model_dir+"/checkpoints/", args.restore_file)
         logging.info("Restoring parameters from {}".format(restore_path))
-        load_checkpoint(restore_path, seq2seq, checkpoint)
+        load_checkpoint(restore_path, seq2seq, optimizer)
 
     # evaluate a trained model on the dev set
     if params.evaluate:
+        print("Only evaluating trained model on dev set...")
         val_loss = evaluate_model(seq2seq, dev_iter, params)
         logging.info("Val Loss: {}".format(val_loss))
         return
@@ -119,25 +129,23 @@ def main(params, model_dir, restore_file):
 
     logging.info("Starting training for {} epoch(s)".format(params.epochs))
     for epoch in range(params.epochs):
-        logging.info("Epoch {}/{}".format(epoch+1, params.num_epochs))
+        logging.info("Epoch {}/{}".format(epoch+1, params.epochs))
 
         # train the model for one epcoh
         train_model(epoch, seq2seq, optimizer, train_iter, params)
 
         # evaluate the model on the dev set
         val_loss = evaluate_model(seq2seq, dev_iter, params)
-        logging.info("Val Loss after {} epochs: {}".format(epoch+1, val_loss))
-
+        logging.info("Val loss after {} epochs: {}".format(epoch+1, val_loss))
         is_best = val_loss <= best_val_loss
 
         # save checkpoint
         save_checkpoint({
             "epoch": epoch+1,
             "state_dict": seq2seq.state_dict(),
-            "optim_dict": optimizer.state_dict(),
-            is_best:is_best,
-            checkpoint:model_dir
-        })
+            "optim_dict": optimizer.state_dict()},
+            is_best=is_best,
+            checkpoint=model_dir+"/checkpoints/")
 
         if val_loss < best_val_loss:
             logging.info("- Found new lowest loss!")
@@ -148,12 +156,10 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser(description="Seq2Seq w/ Attention Hyperparameters")
     p.add_argument("-data_path", type=str, help="location of data")
     p.add_argument("-model_dir", default="./experiments/seq2seq", help="Directory containing seq2seq experiments")
-    p.add_argument("--evaluate", default=False, help="Evaluate the model on the dev set. This requires a `restore_file`.")
+    p.add_argument("-evaluate", default=False, help="Evaluate the model on the dev set. This requires a `restore_file`.")
     p.add_argument("-restore_file", default=None, help="Name of the file in the model directory containing weights \
                    to reload before training")
     args = p.parse_args()
-
-    print("Arguments: {}".format(args))
 
     # Set the logger
     set_logger(os.path.join(args.model_dir, "train.log"))
