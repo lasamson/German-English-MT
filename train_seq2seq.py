@@ -6,11 +6,11 @@ from torch import optim
 from torch.nn.utils import clip_grad_norm
 from torch.nn import functional as F
 from models.Seq2SeqAttn import Encoder, Decoder, Seq2SeqAttn
-from utils import HyperParams, load_dataset, set_logger, load_checkpoint, save_checkpoint
+from utils.utils import HyperParams, load_dataset, set_logger, load_checkpoint, save_checkpoint
 import os, sys
 import logging
 
-def evaluate_model(model, dev_iter, params):
+def evaluate_loss_on_dev(model, dev_iter, params):
     """
     Evaluate the Model on the Dev Set
 
@@ -18,8 +18,6 @@ def evaluate_model(model, dev_iter, params):
         model: the neural network
         dev_iter: BucketIterator for the dev set
         params: hyperparameters for the `model`
-        vocab_size: size of vocab for the target language (EN)
-        EN: TorchText Field object of the target language (EN)
     """
     model.eval()
     total_loss = 0
@@ -46,6 +44,7 @@ def train_model(epoch_num, model, optimizer, train_iter, params):
     Train the Model for one epoch on the training set
 
     Arguments:
+        epoch_num: epoch number during training
         model: the neural network
         optimizer: optimizer for the parameters of the model
         train_iter: BucketIterator over the training data
@@ -101,8 +100,6 @@ def main(params, model_dir, restore_file):
     params.vocab_size = en_size
     params.pad_token = EN.vocab.stoi["<pad>"]
 
-    print(EN.vocab.stoi["<BOS>"])
-    print(EN.vocab.stoi["<EOS>"])
     # Instantiate the Seq2Seq model
     encoder = Encoder(input_size=de_size, embed_size=params.embed_size,
                       hidden_size=params.hidden_size, num_layers=params.n_layers_enc)
@@ -113,15 +110,14 @@ def main(params, model_dir, restore_file):
     optimizer = optim.Adam(seq2seq.parameters(), lr=params.lr)
 
     if restore_file:
-        print("Restore File")
         restore_path = os.path.join(args.model_dir+"/checkpoints/", args.restore_file)
         logging.info("Restoring parameters from {}".format(restore_path))
         load_checkpoint(restore_path, seq2seq, optimizer)
 
     # evaluate a trained model on the dev set
     if params.evaluate:
-        print("Only evaluating trained model on dev set...")
-        val_loss = evaluate_model(seq2seq, dev_iter, params)
+        logging.info("Only evaluating trained model on dev set...")
+        val_loss = evaluate_loss_on_dev(seq2seq, dev_iter, params)
         logging.info("Val Loss: {}".format(val_loss))
         return
 
@@ -135,7 +131,7 @@ def main(params, model_dir, restore_file):
         train_model(epoch, seq2seq, optimizer, train_iter, params)
 
         # evaluate the model on the dev set
-        val_loss = evaluate_model(seq2seq, dev_iter, params)
+        val_loss = evaluate_loss_on_dev(seq2seq, dev_iter, params)
         logging.info("Val loss after {} epochs: {}".format(epoch+1, val_loss))
         is_best = val_loss <= best_val_loss
 
@@ -167,7 +163,6 @@ if __name__ == "__main__":
     json_params_path = os.path.join(args.model_dir, "params.json")
     assert os.path.isfile(json_params_path), "No json configuration file found at {}".format(json_params_path)
     params = HyperParams(json_params_path)
-
 
     params.evaluate = args.evaluate
     params.data_path = args.data_path
