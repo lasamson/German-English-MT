@@ -114,13 +114,6 @@ def main(params):
         logging.info("Restoring parameters from {}".format(restore_path))
         load_checkpoint(restore_path, seq2seq, optimizer)
 
-    # evaluate a trained model on the dev set
-    if params.evaluate:
-        logging.info("Only evaluating trained model on dev set...")
-        val_loss = evaluate_loss_on_dev(seq2seq, dev_iter, params)
-        logging.info("Val Loss: {}".format(val_loss))
-        return
-
     best_val_loss = float('inf')
 
     logging.info("Starting training for {} epoch(s)".format(params.epochs))
@@ -152,7 +145,6 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser(description="Seq2Seq w/ Attention Hyperparameters")
     p.add_argument("-data_path", type=str, help="location of data")
     p.add_argument("-model_dir", default="./experiments/seq2seq", help="Directory containing seq2seq experiments")
-    p.add_argument("-evaluate", default=False, help="Evaluate the model on the dev set. This requires a `restore_file`.")
     p.add_argument("-restore_file", default=None, help="Name of the file in the model directory containing weights \
                    to reload before training")
     args = p.parse_args()
@@ -170,7 +162,6 @@ if __name__ == "__main__":
     params = HyperParams(json_params_path)
 
     # add extra information to the params dictionary related to the training of the model
-    params.evaluate = args.evaluate
     params.data_path = args.data_path
     params.model_dir = args.model_dir
     params.restore_file = args.restore_file
