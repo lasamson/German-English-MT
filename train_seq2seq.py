@@ -52,7 +52,6 @@ def train_model(epoch_num, model, optimizer, train_iter, params):
     """
 
     model.train()
-    total_loss = 0
     criterion = nn.CrossEntropyLoss(ignore_index=params.pad_token)
     loss_avg = RunningAverage()
     for index, batch in enumerate(train_iter):
@@ -74,10 +73,10 @@ def train_model(epoch_num, model, optimizer, train_iter, params):
 
         nn.utils.clip_grad_norm_(model.parameters(), params.grad_clip)
         optimizer.step()
-        total_loss += loss.item()
 
         # update the average loss
         loss_avg.update(loss.item())
+
         #  if index % 100 == 0 and index != 0:
             #  total_loss = total_loss / 100
             #  logging.info("[%d][loss:%5.2f][pp:%5.2f]" %
