@@ -125,7 +125,7 @@ def main(params):
 
         # train the model for one epcoh
         train_loss_avg = train_model(epoch, seq2seq, optimizer, train_iter, params)
-        logging.info("Loss Avg after {} epochs: {}".format(epoch+1, train_loss_avg))
+        logging.info("Loss Avg after {} epochs: {}".format(epoch+1, train_loss_avg()))
 
         # evaluate the model on the dev set
         val_loss = evaluate_loss_on_dev(seq2seq, dev_iter, params)
