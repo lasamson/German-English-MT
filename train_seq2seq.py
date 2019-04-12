@@ -6,7 +6,7 @@ from torch import optim
 from torch.nn.utils import clip_grad_norm
 from torch.nn import functional as F
 from models.Seq2SeqAttn import Encoder, Decoder, Seq2SeqAttn
-from utils.utils import HyperParams, load_dataset, set_logger, load_checkpoint, save_checkpoint
+from utils.utils import HyperParams, load_dataset, set_logger, load_checkpoint, save_checkpoint, RunningAverage
 import os, sys
 import logging
 
@@ -54,6 +54,7 @@ def train_model(epoch_num, model, optimizer, train_iter, params):
     model.train()
     total_loss = 0
     criterion = nn.CrossEntropyLoss(ignore_index=params.pad_token)
+    loss_avg = RunningAverage()
     for index, batch in enumerate(train_iter):
         src, trg = batch.src, batch.trg
         len_src, len_trg = src.size(0), trg.size(0)
@@ -75,11 +76,14 @@ def train_model(epoch_num, model, optimizer, train_iter, params):
         optimizer.step()
         total_loss += loss.item()
 
-        if index % 100 == 0 and index != 0:
-            total_loss = total_loss / 100
-            logging.info("[%d][loss:%5.2f][pp:%5.2f]" %
-                                    (b, total_loss, math.exp(total_loss)))
-            total_loss = 0
+        # update the average loss
+        loss_avg.update(loss.item())
+        #  if index % 100 == 0 and index != 0:
+            #  total_loss = total_loss / 100
+            #  logging.info("[%d][loss:%5.2f][pp:%5.2f]" %
+                                    #  (b, total_loss, math.exp(total_loss)))
+            #  total_loss = 0
+        return loss_avg
 
 def main(params):
     """
@@ -121,7 +125,8 @@ def main(params):
         logging.info("Epoch {}/{}".format(epoch+1, params.epochs))
 
         # train the model for one epcoh
-        train_model(epoch, seq2seq, optimizer, train_iter, params)
+        train_loss_avg = train_model(epoch, seq2seq, optimizer, train_iter, params)
+        logging.info("Loss Avg after {} epochs: {}".format(epoch+1, train_loss_avg))
 
         # evaluate the model on the dev set
         val_loss = evaluate_loss_on_dev(seq2seq, dev_iter, params)
@@ -168,7 +173,6 @@ if __name__ == "__main__":
 
     # use GPU if available
     params.cuda = torch.cuda.is_available()
-    print('is cuda?', params.cuda)
 
     # manual seed for reproducing experiments
     torch.manual_seed(2)
