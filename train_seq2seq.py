@@ -81,7 +81,7 @@ def train_model(epoch_num, model, optimizer, train_iter, params):
                                     (b, total_loss, math.exp(total_loss)))
             total_loss = 0
 
-def main(params, model_dir, restore_file):
+def main(params):
     """
     The main function for training the Seq2Seq model with Dot-Product Attention
 
@@ -109,8 +109,8 @@ def main(params, model_dir, restore_file):
 
     optimizer = optim.Adam(seq2seq.parameters(), lr=params.lr)
 
-    if restore_file:
-        restore_path = os.path.join(args.model_dir+"/checkpoints/", args.restore_file)
+    if params.restore_file:
+        restore_path = os.path.join(params.model_dir+"/checkpoints/", params.restore_file)
         logging.info("Restoring parameters from {}".format(restore_path))
         load_checkpoint(restore_path, seq2seq, optimizer)
 
@@ -141,7 +141,7 @@ def main(params, model_dir, restore_file):
             "state_dict": seq2seq.state_dict(),
             "optim_dict": optimizer.state_dict()},
             is_best=is_best,
-            checkpoint=model_dir+"/checkpoints/")
+            checkpoint=params.model_dir+"/checkpoints/")
 
         if val_loss < best_val_loss:
             logging.info("- Found new lowest loss!")
@@ -157,15 +157,23 @@ if __name__ == "__main__":
                    to reload before training")
     args = p.parse_args()
 
+    # create an experiments folder for training the seq2seq model
+    if not os.path.exists("./experiments/seq2seq/"):
+        os.mkdir("./experiments/seq2seq/")
+
     # Set the logger
     set_logger(os.path.join(args.model_dir, "train.log"))
 
+    # load the params json file (if it exists)
     json_params_path = os.path.join(args.model_dir, "params.json")
     assert os.path.isfile(json_params_path), "No json configuration file found at {}".format(json_params_path)
     params = HyperParams(json_params_path)
 
+    # add extra information to the params dictionary related to the training of the model
     params.evaluate = args.evaluate
     params.data_path = args.data_path
+    params.model_dir = args.model_dir
+    params.restore_file = args.restore_file
 
     # use GPU if available
     params.cuda = torch.cuda.is_available()
@@ -174,4 +182,4 @@ if __name__ == "__main__":
     torch.manual_seed(2)
     if params.cuda: torch.cuda.manual_seed(2)
 
-    main(params, args.model_dir, args.restore_file)
+    main(params)
