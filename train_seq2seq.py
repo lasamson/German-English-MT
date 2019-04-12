@@ -77,11 +77,9 @@ def train_model(epoch_num, model, optimizer, train_iter, params):
         # update the average loss
         loss_avg.update(loss.item())
 
-        #  if index % 100 == 0 and index != 0:
-            #  total_loss = total_loss / 100
-            #  logging.info("[%d][loss:%5.2f][pp:%5.2f]" %
-                                    #  (b, total_loss, math.exp(total_loss)))
-            #  total_loss = 0
+        if index % 50 == 0 and index != 0:
+            logging.info("[%d][loss:%5.2f][pp:%5.2f]" %
+                                    (index, loss_avg(), math.exp(loss_avg()))
         return loss_avg
 
 def main(params):
