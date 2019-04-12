@@ -99,8 +99,19 @@ def set_logger(log_path):
         logger.addHandler(stream_handler)
 
 
+class RunningAverage():
+    """ A class that maintains the running average of a quanity """
+    def __init__(self):
+        self.steps = 0
+        self.total = 0
+    def update(self, val):
+        self.total += val
+        self.steps += 1
+    def __call__(self):
+        return self.total / float(self.steps)
+
 class HyperParams():
-    """ Class that loads hyperparams from a JSON file  """
+    """ Class that loads hyperparams for a particular `model` from a JSON file  """
     def __init__(self, json_path):
         with open(json_path) as f:
             params = json.load(f)
