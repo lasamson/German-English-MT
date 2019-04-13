@@ -76,7 +76,10 @@ class Seq2SeqAttn(nn.Module):
         batch_size = src.size(0) # src, trg shape = B x L
         seq_len = trg.size(1)
         vocab_size = self.decoder.output_size
-        decoder_outputs = Variable(torch.zeros(batch_size, seq_len, vocab_size)).cuda()
+        if torch.cuda.is_available():
+            decoder_outputs = Variable(torch.zeros(batch_size, seq_len, vocab_size)).cuda()
+        else:
+            decoder_outputs = Variable(torch.zeros(batch_size, seq_len, vocab_size))
 
         encoder_output, (h, c) = self.encoder(src)
         h = h[:self.decoder.num_layers]
