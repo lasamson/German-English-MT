@@ -12,16 +12,17 @@ import logging
 
 def evaluate_loss_on_dev(model, dev_iter, params):
     """
-    Evaluate the Model on the Dev Set
+    Evaluate the loss of the `model` on the dev set
 
     Arguments:
         model: the neural network
         dev_iter: BucketIterator for the dev set
         params: hyperparameters for the `model`
     """
+
     model.eval()
-    total_loss = 0
     criterion = nn.CrossEntropyLoss(ignore_index=params.pad_token)
+    loss_avg = RunningAverage()
     with torch.no_grad():
         for index, batch in enumerate(dev_iter):
             src, trg = batch.src, batch.trg
@@ -36,8 +37,8 @@ def evaluate_loss_on_dev(model, dev_iter, params):
             assert output.size(0) == trg.size(0)
 
             loss = criterion(output, trg)
-            total_loss += loss.item()
-    return total_loss / len(dev_iter)
+            loss_avg.update(loss.item())
+    return loss_avg()
 
 def train_model(epoch_num, model, optimizer, train_iter, params):
     """
@@ -79,8 +80,8 @@ def train_model(epoch_num, model, optimizer, train_iter, params):
 
         if index % 50 == 0 and index != 0:
             logging.info("[%d][loss:%5.2f][pp:%5.2f]" %
-                                    (index, loss_avg(), math.exp(loss_avg()))
-        return loss_avg
+                                    (index, loss_avg(), math.exp(loss_avg())))
+        return loss_avg()
 
 def main(params):
     """
@@ -123,7 +124,7 @@ def main(params):
 
         # train the model for one epcoh
         train_loss_avg = train_model(epoch, seq2seq, optimizer, train_iter, params)
-        logging.info("Loss Avg after {} epochs: {}".format(epoch+1, train_loss_avg()))
+        logging.info("Loss Avg after {} epochs: {}".format(epoch+1, train_loss_avg))
 
         # evaluate the model on the dev set
         val_loss = evaluate_loss_on_dev(seq2seq, dev_iter, params)
@@ -150,6 +151,7 @@ if __name__ == "__main__":
     p.add_argument("-restore_file", default=None, help="Name of the file in the model directory containing weights \
                    to reload before training")
     args = p.parse_args()
+    logging.info("Using Arguments: {}".format(args))
 
     # create an experiments folder for training the seq2seq model
     if not os.path.exists("./experiments/seq2seq/"):
@@ -170,6 +172,7 @@ if __name__ == "__main__":
 
     # use GPU if available
     params.cuda = torch.cuda.is_available()
+    logging.info("Using GPU: {}".format(params.cuda))
 
     # manual seed for reproducing experiments
     torch.manual_seed(2)
