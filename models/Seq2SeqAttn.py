@@ -88,5 +88,8 @@ class Seq2SeqAttn(nn.Module):
           decoder_outputs[:,t] = decoder_output
           teach = random.random() < tf_ratio
           greedy = decoder_output.data.max(1)[1]
-          decoder_output = Variable(trg.data[:, t] if teach else greedy).cuda()
+          if torch.cuda.is_available():
+            decoder_output = Variable(trg.data[:, t] if teach else greedy).cuda()
+          else:
+            decoder_output = Variable(trg.data[:, t] if teach else greedy)
         return decoder_outputs
