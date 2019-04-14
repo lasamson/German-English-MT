@@ -5,23 +5,26 @@ from torch.autograd import Variable
 from torch import optim
 from torch.nn.utils import clip_grad_norm
 from torch.nn import functional as F
+from utils.data_loader import load_dataset
 from models.lstm_seq2seq import Encoder, Decoder, Seq2Seq
-from utils.utils import HyperParams, load_dataset, set_logger, load_checkpoint, save_checkpoint, RunningAverage
+from utils.utils import HyperParams, set_logger, load_checkpoint, save_checkpoint, RunningAverage
 import os, sys
 import logging
+import time
 
 def evaluate_loss_on_dev(model, dev_iter, params):
     """
-    Evaluate the Model on the Dev Set
+    Evaluate the loss of the `model` on the dev set
 
     Arguments:
         model: the neural network
         dev_iter: BucketIterator for the dev set
         params: hyperparameters for the `model`
     """
+
     model.eval()
-    total_loss = 0
     criterion = nn.CrossEntropyLoss(ignore_index=params.pad_token)
+    loss_avg = RunningAverage()
     with torch.no_grad():
         for index, batch in enumerate(dev_iter):
             src, trg = batch.src, batch.trg
@@ -36,8 +39,8 @@ def evaluate_loss_on_dev(model, dev_iter, params):
             assert output.size(0) == trg.size(0)
 
             loss = criterion(output, trg)
-            total_loss += loss.item()
-    return total_loss / len(dev_iter)
+            loss_avg.update(loss.item())
+    return loss_avg()
 
 def train_model(epoch_num, model, optimizer, train_iter, params):
     """
@@ -77,10 +80,17 @@ def train_model(epoch_num, model, optimizer, train_iter, params):
         # update the average loss
         loss_avg.update(loss.item())
 
-        # if index % 50 == 0 and index != 0:
-        #     logging.info("[%d][loss:%5.2f][pp:%5.2f]" %
-        #                             (index, loss_avg(), math.exp(loss_avg()))
-    return loss_avg
+        if index % 50 == 0 and index != 0:
+            logging.info("[%d][loss:%5.2f][pp:%5.2f]" %
+                                    (index, loss_avg(), math.exp(loss_avg())))
+        return loss_avg()
+
+def epoch_time(start_time, end_time):
+    """ Calculate time to train a single Epoch in minutes and seconds """
+    elapsed_time = end_time - start_time
+    elapsed_mins = int(elapsed_time / 60)
+    elapsed_secs = int(elapsed_time - (elapsed_mins * 60))
+    return elapsed_mins, elapsed_secs
 
 def main(params):
     """
@@ -124,13 +134,17 @@ def main(params):
         logging.info("Epoch {}/{}".format(epoch+1, params.epochs))
 
         # train the model for one epcoh
+        epoch_start_time = time.time()
         train_loss_avg = train_model(epoch, seq2seq, optimizer, train_iter, params)
-        logging.info("Loss Avg after {} epochs: {}".format(epoch+1, train_loss_avg()))
+        epoch_end_time = time.time()
+        epoch_mins, epoch_secs = epoch_time(epoch_start_time, epoch_end_time)
 
         # evaluate the model on the dev set
         val_loss = evaluate_loss_on_dev(seq2seq, dev_iter, params)
-        logging.info("Val loss after {} epochs: {}".format(epoch+1, val_loss))
-        is_best = val_loss <= best_val_loss
+        # logging.info("Val loss after {} epochs: {}".format(epoch+1, val_loss))
+        logging.info(f'Epoch: {epoch+1:02} | Avg Train Loss: {train_loss_avg} | Val Loss: {val_loss} | Time: {epoch_mins}m {epoch_secs}s')
+        # val_loss = .003
+        is_best = val_loss < best_val_loss
 
         # save checkpoint
         save_checkpoint({
@@ -140,7 +154,7 @@ def main(params):
             is_best=is_best,
             checkpoint=params.model_dir+"/checkpoints/")
 
-        if val_loss < best_val_loss:
+        if is_best:
             logging.info("- Found new lowest loss!")
             best_val_loss = val_loss
 
@@ -172,6 +186,7 @@ if __name__ == "__main__":
 
     # use GPU if available
     params.cuda = torch.cuda.is_available()
+    logging.info("Using GPU: {}".format(params.cuda))
 
     # manual seed for reproducing experiments
     torch.manual_seed(2)
