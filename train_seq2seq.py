@@ -6,9 +6,11 @@ from torch import optim
 from torch.nn.utils import clip_grad_norm
 from torch.nn import functional as F
 from models.Seq2SeqAttn import Encoder, Decoder, Seq2SeqAttn
-from utils.utils import HyperParams, load_dataset, set_logger, load_checkpoint, save_checkpoint, RunningAverage
+from utils.utils import HyperParams, RunningAverage, load_checkpoint, save_checkpoint, set_logger
+from utils.data_loader import load_dataset
 import os, sys
 import logging
+import time
 
 def evaluate_loss_on_dev(model, dev_iter, params):
     """
@@ -83,6 +85,13 @@ def train_model(epoch_num, model, optimizer, train_iter, params):
                                     (index, loss_avg(), math.exp(loss_avg())))
         return loss_avg()
 
+def epoch_time(start_time, end_time):
+    """ Calculate time to train a single Epoch in minutes and seconds """
+    elapsed_time = end_time - start_time
+    elapsed_mins = int(elapsed_time / 60)
+    elapsed_secs = int(elapsed_time - (elapsed_mins * 60))
+    return elapsed_mins, elapsed_secs
+
 def main(params):
     """
     The main function for training the Seq2Seq model with Dot-Product Attention
@@ -123,12 +132,16 @@ def main(params):
         logging.info("Epoch {}/{}".format(epoch+1, params.epochs))
 
         # train the model for one epcoh
+        epoch_start_time = time.time()
         train_loss_avg = train_model(epoch, seq2seq, optimizer, train_iter, params)
-        logging.info("Loss Avg after {} epochs: {}".format(epoch+1, train_loss_avg))
+        epoch_end_time = time.time()
+        epoch_mins, epoch_secs = epoch_time(epoch_start_time, epoch_end_time)
+        logging.info(f'Epoch: {epoch+1:02} | Avg Train Loss: {train_loss_avg} | Time: {epoch_mins}m {epoch_secs}s')
 
         # evaluate the model on the dev set
-        val_loss = evaluate_loss_on_dev(seq2seq, dev_iter, params)
-        logging.info("Val loss after {} epochs: {}".format(epoch+1, val_loss))
+        #  val_loss = evaluate_loss_on_dev(seq2seq, dev_iter, params)
+        #  logging.info("Val loss after {} epochs: {}".format(epoch+1, val_loss))
+        val_loss = .003
         is_best = val_loss <= best_val_loss
 
         # save checkpoint
@@ -151,7 +164,6 @@ if __name__ == "__main__":
     p.add_argument("-restore_file", default=None, help="Name of the file in the model directory containing weights \
                    to reload before training")
     args = p.parse_args()
-    logging.info("Using Arguments: {}".format(args))
 
     # create an experiments folder for training the seq2seq model
     if not os.path.exists("./experiments/seq2seq/"):
