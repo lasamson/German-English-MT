@@ -5,7 +5,6 @@ from torch.autograd import Variable
 from torch import optim
 from torch.nn.utils import clip_grad_norm
 from torch.nn import functional as F
-# from models.Seq2SeqAttn import Encoder, Decoder, Seq2SeqAttn
 from models.lstm_seq2seq import Encoder, Decoder, Seq2Seq
 from utils.utils import HyperParams, load_dataset, set_logger, load_checkpoint, save_checkpoint, RunningAverage
 import os, sys
@@ -78,10 +77,10 @@ def train_model(epoch_num, model, optimizer, train_iter, params):
         # update the average loss
         loss_avg.update(loss.item())
 
-        if index % 50 == 0 and index != 0:
-            logging.info("[%d][loss:%5.2f][pp:%5.2f]" %
-                                    (index, loss_avg(), math.exp(loss_avg()))
-        return loss_avg
+        # if index % 50 == 0 and index != 0:
+        #     logging.info("[%d][loss:%5.2f][pp:%5.2f]" %
+        #                             (index, loss_avg(), math.exp(loss_avg()))
+    return loss_avg
 
 def main(params):
     """
@@ -104,9 +103,9 @@ def main(params):
 
     # Instantiate the Seq2Seq model
     encoder = Encoder(input_size=de_size, embed_size=params.embed_size,
-                      hidden_size=params.hidden_size, num_layers=params.n_layers_enc)
+                      hidden_size=params.hidden_size, num_layers=params.n_layers_enc, dropout=params.dropout_enc)
     decoder = Decoder(output_size=en_size, embed_size=params.embed_size,
-                      hidden_size=params.hidden_size, num_layers=params.n_layers_dec)
+                      hidden_size=params.hidden_size, num_layers=params.n_layers_dec, dropout=params.dropout_dec)
     # seq2seq = Seq2SeqAttn(encoder, decoder).cuda() if params.cuda else Seq2SeqAttn(encoder, decoder)
     device = torch.device('cuda' if params.cuda else 'cpu')
     seq2seq = Seq2Seq(encoder, decoder, device).to(device)

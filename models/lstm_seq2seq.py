@@ -1,8 +1,6 @@
 import random
 import torch
 from torch import nn
-import torch.nn.functional as F
-from torch.autograd import Variable
 
 class Encoder(nn.Module):
     def __init__(self, input_size, embed_size, hidden_size, num_layers=1, dropout=0.5):
