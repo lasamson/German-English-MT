@@ -27,8 +27,8 @@ def load_dataset(data_path, min_freq=2, batch_size=128):
         """ Tokenize English text """
         return [tok.text for tok in spacy_en.tokenizer(text)]
 
-    SRC = Field(tokenize=tokenize_de, init_token="<BOS>", eos_token="<EOS>", batch_first=True)
-    TRG = Field(tokenize=tokenize_en, init_token="<BOS>", eos_token="<EOS>", batch_first=True)
+    SRC = Field(tokenize=tokenize_de, init_token="<bos>", eos_token="<eos>", lower=True)
+    TRG = Field(tokenize=tokenize_en, init_token="<bos>", eos_token="<eos>", lower=True)
 
     train_data, dev_data = datasets.TranslationDataset.splits(exts=(".de", ".en"),
                                     fields=(SRC, TRG), path=data_path, test=None, validation="dev")

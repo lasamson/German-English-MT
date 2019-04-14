@@ -5,7 +5,8 @@ from torch.autograd import Variable
 from torch import optim
 from torch.nn.utils import clip_grad_norm
 from torch.nn import functional as F
-from models.Seq2SeqAttn import Encoder, Decoder, Seq2SeqAttn
+# from models.Seq2SeqAttn import Encoder, Decoder, Seq2SeqAttn
+from models.lstm_seq2seq import Encoder, Decoder, Seq2Seq
 from utils.utils import HyperParams, load_dataset, set_logger, load_checkpoint, save_checkpoint, RunningAverage
 import os, sys
 import logging
@@ -108,7 +109,9 @@ def main(params):
                       hidden_size=params.hidden_size, num_layers=params.n_layers_enc)
     decoder = Decoder(output_size=en_size, embed_size=params.embed_size,
                       hidden_size=params.hidden_size, num_layers=params.n_layers_dec)
-    seq2seq = Seq2SeqAttn(encoder, decoder).cuda() if params.cuda else Seq2SeqAttn(encoder, decoder)
+    # seq2seq = Seq2SeqAttn(encoder, decoder).cuda() if params.cuda else Seq2SeqAttn(encoder, decoder)
+    device = torch.device('cuda' if params.cuda else 'cpu')
+    seq2seq = Seq2Seq(encoder, decoder, device).to(device)
 
     optimizer = optim.Adam(seq2seq.parameters(), lr=params.lr)
 
