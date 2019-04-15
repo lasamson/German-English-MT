@@ -40,7 +40,6 @@ def batch_reverse_tokenization(batch, params):
     sentences = []
     for example in batch:
         sentence = [params.itos[example[i]] for i in range(batch.size(1))]
-        sentence = ' '.join(sentence)
         sentences.append(sentence)
     return sentences
 
