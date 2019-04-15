@@ -3,8 +3,9 @@
 import argparse
 import os
 import torch
-from utils.utils import HyperParams, load_dataset, load_checkpoint
-from models.Seq2SeqAttn import Encoder, Decoder, Seq2SeqAttn
+from utils.data_loader import load_dataset
+from utils.utils import HyperParams, load_checkpoint
+from models.lstm_seq2seq import Encoder, Decoder, Seq2Seq
 
 def output_decoded_sentences_to_file(outputs, model_dir, filename):
     """
@@ -90,10 +91,11 @@ def main(data_path, greedy, beam_size):
 
     # instantiate the Seq2Seq model
     encoder = Encoder(input_size=de_size, embed_size=params.embed_size,
-                      hidden_size=params.hidden_size, num_layers=params.n_layers_enc)
+                      hidden_size=params.hidden_size, num_layers=params.n_layers_enc, dropout=params.dropout_enc)
     decoder = Decoder(output_size=en_size, embed_size=params.embed_size,
-                      hidden_size=params.hidden_size, num_layers=params.n_layers_dec)
-    seq2seq = Seq2SeqAttn(encoder, decoder).cuda() if params.cuda else Seq2SeqAttn(encoder, decoder)
+                      hidden_size=params.hidden_size, num_layers=params.n_layers_dec, dropout=params.dropout_dec)
+    device = torch.device('cuda' if params.cuda else 'cpu')
+    seq2seq = Seq2Seq(encoder, decoder, device).to(device)
 
     model_path = os.path.join(args.model_dir+"/checkpoints/", params.model_file)
     print("Restoring parameters from {}".format(model_path))

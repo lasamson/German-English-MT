@@ -4,11 +4,11 @@
     "batch_size": 64,
     "embed_size": 256,
     "hidden_size": 512,
-    "n_layers_dec": 2,
-    "n_layers_enc": 2,
+    "n_layers_dec": 1,
+    "n_layers_enc": 1,
     "dropout_enc": 0.5,
     "dropout_dec": 0.5,
-    "lr": 1e-4,
+    "lr": 1e-3,
     "grad_clip": 25e-2,
     "teacher_forcing_ratio": 5e-1
 }
