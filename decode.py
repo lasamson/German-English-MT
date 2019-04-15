@@ -7,6 +7,7 @@ from utils.data_loader import load_dataset
 from utils.utils import HyperParams, load_checkpoint
 from models.lstm_seq2seq import Encoder, Decoder, Seq2Seq
 
+
 def output_decoded_sentences_to_file(outputs, model_dir, filename):
     """
     Output the decoded sentences to a file
@@ -39,6 +40,7 @@ def batch_reverse_tokenization(batch, params):
     sentences = []
     for example in batch:
         sentence = [params.itos[example[i]] for i in range(batch.size(1))]
+        sentence = ' '.join(sentence)
         sentences.append(sentence)
     return sentences
 
@@ -73,7 +75,7 @@ def greedy_decoding(model, dev_iter, params):
     return decoded_sentences
 
 
-def beam_search(model, dev_iter, params, beam_width=3):
+def beam_search(model, dev_iter, params, beam_width=5):
     decoded_sentences = []
     model.eval()
     with torch.no_grad():

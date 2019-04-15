@@ -26,11 +26,11 @@ iwslt_data.GetContentFile('iwslt_en_de.zip')
 
 !unzip iwslt_en_de.zip dev.en
 
-"""%%shell
+%%shell
 #!/bin/bash
 
 # This is a reference to the gold translations from the dev set
-REFERENCE_FILE="dev.en"
+REFERENCE_FILE="/data/iwslt/dev.en"
 
 # XXX: Change the following line to point to your model's output!
 TRANSLATED_FILE="dev.en"
@@ -44,4 +44,3 @@ perl "mosesdecoder/scripts/tokenizer/detokenizer.perl" -l en < "$TRANSLATED_FILE
 
 PARAMS=("-tok" "intl" "-l" "de-en" "$REFERENCE_FILE")
 sacrebleu "${PARAMS[@]}" < "$TRANSLATED_FILE.detok"
-"""
