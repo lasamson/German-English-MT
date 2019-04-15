@@ -27,6 +27,7 @@ def output_decoded_sentences_to_file(outputs, model_dir, filename):
             sentence = " ".join(sentence)
             f.write(sentence + "\n")
 
+
 def batch_reverse_tokenization(batch, params):
     """
     Converts the token IDs to actual words in a batch
@@ -40,6 +41,7 @@ def batch_reverse_tokenization(batch, params):
         sentence = [params.itos[example[i]] for i in range(batch.size(1))]
         sentences.append(sentence)
     return sentences
+
 
 def greedy_decoding(model, dev_iter, params):
     """ Do greedy decoding a trained model
@@ -60,7 +62,7 @@ def greedy_decoding(model, dev_iter, params):
             if params.cuda:
                 src, trg = src.cuda(), trg.cuda()
 
-            output = model(src, trg, tf_ratio = 0.0)
+            output = model(src, trg, tf_ratio=0.0)
             _, output = torch.max(output, 2)
             print(output.size())
             tokens = batch_reverse_tokenization(output, params)
@@ -70,8 +72,31 @@ def greedy_decoding(model, dev_iter, params):
     print(decoded_sentences[0:2])
     return decoded_sentences
 
-def beam_search():
-    pass
+
+def beam_search(model, dev_iter, params, beam_width=3):
+    decoded_sentences = []
+    model.eval()
+    with torch.no_grad():
+        for index, batch in enumerate(dev_iter):
+            outputs = []
+            src, trg = batch.src, batch.trg
+            print(src.size(), trg.size())
+
+            if params.cuda:
+                src, trg = src.cuda(), trg.cuda()
+
+            for i, sent in range(len(batch)):
+                pass
+                output = model(src[i], trg[i], tf_ratio=0.0)
+                print(output.size())
+                outputs.append(output)
+            tokens = batch_reverse_tokenization(outputs, params)
+            decoded_sentences.extend(tokens)
+
+    print(len(decoded_sentences))
+    print(decoded_sentences[0:2])
+    return decoded_sentences
+
 
 def main(data_path, greedy, beam_size):
     """
@@ -97,14 +122,17 @@ def main(data_path, greedy, beam_size):
     device = torch.device('cuda' if params.cuda else 'cpu')
     seq2seq = Seq2Seq(encoder, decoder, device).to(device)
 
-    model_path = os.path.join(args.model_dir+"/checkpoints/", params.model_file)
+    model_path = os.path.join(args.model_dir + "/checkpoints/", params.model_file)
     print("Restoring parameters from {}".format(model_path))
     load_checkpoint(model_path, seq2seq)
 
     if greedy:
         outputs = greedy_decoding(seq2seq, dev_iter, params)
+    else:
+        outputs = beam_search(seq2seq, dev_iter, params)
 
     output_decoded_sentences_to_file(outputs, params.model_dir, "greedy_outputs.txt")
+
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description="Obtain BLEU scores for trained models")
@@ -112,7 +140,7 @@ if __name__ == "__main__":
     p.add_argument("-model_dir", type=str, help="Directory containing model")
     p.add_argument("-model_file", type=str, help="Model file")
     p.add_argument("-greedy", type=bool, default=True, help="Greedy Decoding on outputs")
-    p.add_argument("-beam_size", default=False, help="Beam Search on outputs")
+    p.add_argument("-beam_size", default=1, help="Beam Search on outputs")
 
     args = p.parse_args()
 
@@ -128,4 +156,3 @@ if __name__ == "__main__":
     params.cuda = torch.cuda.is_available()
 
     main(params, args.greedy, args.beam_size)
-

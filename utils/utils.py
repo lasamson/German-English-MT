@@ -4,6 +4,7 @@ import os
 import shutil
 import logging
 
+
 def save_checkpoint(state, is_best, checkpoint):
     """
     Save a checkpoint of the model
@@ -19,6 +20,7 @@ def save_checkpoint(state, is_best, checkpoint):
     torch.save(state, filepath)
     if is_best:
         shutil.copyfile(filepath, os.path.join(checkpoint, "best.pth.tar"))
+
 
 def load_checkpoint(checkpoint, model, optimizer=None):
     """
@@ -39,6 +41,7 @@ def load_checkpoint(checkpoint, model, optimizer=None):
         optimizer.load_state_dict(checkpoint["optim_dict"])
     return checkpoint
 
+
 def set_logger(log_path):
     """
     Set logger to log info in the terminal and file `log path`
@@ -48,7 +51,7 @@ def set_logger(log_path):
     """
 
     logger = logging.getLogger()
-    logger.setLevel(logging.INFO) # INFO: confirmation that things are working as expected
+    logger.setLevel(logging.INFO)  # INFO: confirmation that things are working as expected
 
     if not logger.handlers:
         file_handler = logging.FileHandler(log_path)
@@ -63,30 +66,58 @@ def set_logger(log_path):
 
 class RunningAverage():
     """ A class that maintains the running average of a quanity """
+
     def __init__(self):
         self.steps = 0
         self.total = 0
+
     def update(self, val):
         self.total += val
         self.steps += 1
+
     def __call__(self):
         return self.total / float(self.steps)
 
+
 class HyperParams():
     """ Class that loads hyperparams for a particular `model` from a JSON file  """
+
     def __init__(self, json_path):
         with open(json_path) as f:
             params = json.load(f)
             self.__dict__.update(params)
+
     def save(self, json_path):
         with open(json_path, "w") as f:
             json.dump(self.__dict__, f, indent=4)
+
     def update(self, json_path):
         """ Loads parameters from a JSON file """
         with open(json_path) as f:
             params = json.loads(f)
             self.__dict__.update(params)
+
     @property
     def dict(self):
         """ Give dict-like access to Params """
         return self.__dict__
+
+
+class BeamSearchNode(object):
+    def __init__(self, previousNode, wordId, logProb, length):
+        '''
+        :param previousNode:
+        :param wordId:
+        :param logProb:
+        :param length:
+        '''
+        self.prevNode = previousNode
+        self.wordid = wordId
+        self.log_p = logProb
+        self.leng = length
+
+    def eval(self, alpha=1.0):
+        reward = 0
+        # Add here a function for shaping a reward
+
+        return self.logp / float(self.leng - 1 + 1e-6) + alpha * reward

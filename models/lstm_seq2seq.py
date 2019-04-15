@@ -1,6 +1,8 @@
 import random
 import torch
 from torch import nn
+from utils.utils import BeamSearchNode
+
 
 class Encoder(nn.Module):
     def __init__(self, input_size, embed_size, hidden_size, num_layers=1, dropout=0.5):
@@ -18,7 +20,7 @@ class Encoder(nn.Module):
     def forward(self, src, h=None, c=None):
         embedded = self.embed(src)
         embedded = self.dropout(embedded)
-        
+
         if (h and c):
             outputs, (h, c) = self.lstm(embedded, (h, c))
         else:
@@ -59,7 +61,7 @@ class Seq2Seq(nn.Module):
         self.decoder = decoder
         self.device = device
 
-    def forward(self, src, trg, tf_ratio=0.5):
+    def forward(self, src, trg, beam_size=1, tf_ratio=0.5):
         seq_len = trg.shape[0]
         batch_size = trg.shape[1]
         vocab_size = self.decoder.output_size
@@ -70,11 +72,58 @@ class Seq2Seq(nn.Module):
 
         input = trg[0]
 
-        for t in range(1, seq_len):
-            output, (h, c) = self.decoder(input, h, c, encoder_outputs)
-            outputs[t] = output
+        if beam_size > 1:
+            queue = PriorityQueue()
+            qsize = 1
 
-            pred = output.max(1)[1]
-            input = trg[t] if random.random() < tf_ratio else pred
+            logp = 0
+            node = BeamSearchNode(None, input, logp, 1)
+            queue.put((-node.eval(), node))
+
+            endnode = None
+
+            while True:
+                if qsize > 2000:
+                    break
+                score, node = queue.get()
+                if node.wordid.item() == 3:  # Check for EOS
+                    endnode = node
+                    break
+
+                output, (h, c) = self.decoder(node.wordid.item(), h, c, encoder_outputs)
+                log_prob, indices = torch.topk(output, beam_size)
+                next_nodes = []
+
+                for new_k in range(beam_size):
+                    decoded_t = indices[new_k]
+                    logp = log_prob[new_k]
+
+                    n = BeamSearchNode(node, decoded_t, node.log_p + logp, node.leng + 1)
+                    next_nodes.appemd((-n.eval(), n))
+
+                for i in range(len(next_nodes)):
+                    queue.put(next_nodes[i])
+
+                qsize += len(next_nodes) - 1
+
+            if endnode == None:
+                endnode = node.get()
+
+            utterance = []
+            node = endnode
+            utterance.append(endnode.wordid)
+            while node.prevNode != None:
+                node = node.prevNode
+                utterance.append(node.wordid)
+            utterance = utterance[::-1]
+            outputs = utterance
+
+        else:
+            for t in range(1, seq_len):
+                output, (h, c) = self.decoder(input, h, c, encoder_outputs)
+                outputs[t] = output
+
+                pred = output.max(1)[1]
+                input = trg[t] if random.random() < tf_ratio else pred
 
         return outputs
