@@ -6,8 +6,8 @@ from torch import optim
 from torch.nn.utils import clip_grad_norm
 from torch.nn import functional as F
 from utils.data_loader import load_dataset
-from models.lstm_seq2seq import Encoder, Decoder, Seq2Seq
-from utils.utils import HyperParams, load_dataset, set_logger, load_checkpoint, save_checkpoint, RunningAverage
+from models.seq2seq import Encoder, Decoder, Seq2Seq
+from utils.utils import HyperParams, set_logger, load_checkpoint, save_checkpoint, RunningAverage
 import os, sys
 import logging
 import time
@@ -27,12 +27,13 @@ def evaluate_loss_on_dev(model, dev_iter, params):
     loss_avg = RunningAverage()
     with torch.no_grad():
         for index, batch in enumerate(dev_iter):
-            src, trg = batch.src, batch.trg
+            src, src_lengths = batch.src
+            trg, trg_lengths = batch.trg
 
             if params.cuda:
                 src, trg = src.cuda(), trg.cuda()
 
-            output = model(src, trg, tf_ratio=0.0)
+            output = model(src, trg, src_lengths, trg_lengths, tf_ratio=0.0)
             output = output[:, :-1, :].contiguous().view(-1, params.vocab_size)
             trg = trg[:, 1:].contiguous().view(-1)
 
@@ -58,8 +59,8 @@ def train_model(epoch_num, model, optimizer, train_iter, params):
     criterion = nn.CrossEntropyLoss(ignore_index=params.pad_token)
     loss_avg = RunningAverage()
     for index, batch in enumerate(train_iter):
-        src, trg = batch.src, batch.trg
-        len_src, len_trg = src.size(0), trg.size(0)
+        src, _ = batch.src
+        trg, _ = batch.trg
 
         if params.cuda:
             src, trg = src.cuda(), trg.cuda()
@@ -83,7 +84,8 @@ def train_model(epoch_num, model, optimizer, train_iter, params):
         if index % 50 == 0 and index != 0:
             logging.info("[%d][loss:%5.2f][pp:%5.2f]" %
                                     (index, loss_avg(), math.exp(loss_avg())))
-        return loss_avg()
+        break
+    return loss_avg()
 
 def epoch_time(start_time, end_time):
     """ Calculate time to train a single Epoch in minutes and seconds """
@@ -108,15 +110,19 @@ def main(params):
     logging.info("[DE Vocab Size]: {}, [EN Vocab Size]: {}".format(de_size, en_size))
     logging.info("- done.")
 
+    print("Most common words (src):")
+    print("\n".join(["%10s %10d" % x for x in DE.vocab.freqs.most_common(10)]), "\n")
+    print("Most common words (trg):")
+    print("\n".join(["%10s %10d" % x for x in EN.vocab.freqs.most_common(10)]), "\n") 
+
     params.vocab_size = en_size
     params.pad_token = EN.vocab.stoi["<pad>"]
 
     # Instantiate the Seq2Seq model
-    encoder = Encoder(input_size=de_size, embed_size=params.embed_size,
-                      hidden_size=params.hidden_size, num_layers=params.n_layers_enc)
-    decoder = Decoder(output_size=en_size, embed_size=params.embed_size,
-                      hidden_size=params.hidden_size, num_layers=params.n_layers_dec)
-    # seq2seq = Seq2SeqAttn(encoder, decoder).cuda() if params.cuda else Seq2SeqAttn(encoder, decoder)
+    encoder = Encoder(src_vocab_size=de_size, embed_size=params.embed_size,
+                      hidden_size=params.hidden_size, enc_dropout=params.enc_dropout, num_layers=params.n_layers_enc)
+    decoder = Decoder(trg_vocab_size=en_size, embed_size=params.embed_size,
+                      hidden_size=params.hidden_size, dec_dropout=params.dec_dropout, num_layers=params.n_layers_dec)
     device = torch.device('cuda' if params.cuda else 'cpu')
     seq2seq = Seq2Seq(encoder, decoder, device).to(device)
 
@@ -141,9 +147,9 @@ def main(params):
         logging.info(f'Epoch: {epoch+1:02} | Avg Train Loss: {train_loss_avg} | Time: {epoch_mins}m {epoch_secs}s')
 
         # evaluate the model on the dev set
+        val_loss = float("inf")
         #  val_loss = evaluate_loss_on_dev(seq2seq, dev_iter, params)
         #  logging.info("Val loss after {} epochs: {}".format(epoch+1, val_loss))
-        val_loss = .003
         is_best = val_loss <= best_val_loss
 
         # save checkpoint
@@ -154,9 +160,9 @@ def main(params):
             is_best=is_best,
             checkpoint=params.model_dir+"/checkpoints/")
 
-        if val_loss < best_val_loss:
-            logging.info("- Found new lowest loss!")
-            best_val_loss = val_loss
+        #  if val_loss < best_val_loss:
+            #  logging.info("- Found new lowest loss!")
+            #  best_val_loss = val_loss
 
 
 if __name__ == "__main__":

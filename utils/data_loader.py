@@ -3,7 +3,7 @@ from torchtext.data import Field, BucketIterator
 import spacy
 import torch
 
-def load_dataset(data_path, min_freq=2, batch_size=128):
+def load_dataset(data_path, min_freq=5, batch_size=128):
     """
     Returns iterators for the training/dev dataset
 
@@ -23,18 +23,20 @@ def load_dataset(data_path, min_freq=2, batch_size=128):
         """ Tokenize English text """
         return [tok.text for tok in spacy_en.tokenizer(text)]
 
-    SRC = Field(tokenize=tokenize_de, init_token="<BOS>", eos_token="<EOS>", batch_first=True)
-    TRG = Field(tokenize=tokenize_en, init_token="<BOS>", eos_token="<EOS>", batch_first=True)
+    SRC = Field(tokenize=tokenize_de, init_token=None, eos_token="</s>", batch_first=True, include_lengths=True)
+    TRG = Field(tokenize=tokenize_en, init_token="<s>", eos_token="</s>", batch_first=True, include_lengths=True)
 
     train_data, dev_data = datasets.TranslationDataset.splits(exts=(".de", ".en"),
                                     fields=(SRC, TRG), path=data_path, test=None, validation="dev")
 
-    SRC.build_vocab(train_data, min_freq=min_freq)
-    TRG.build_vocab(train_data, min_freq=min_freq)
+    SRC.build_vocab(train_data.src, min_freq=min_freq)
+    TRG.build_vocab(train_data.trg, min_freq=min_freq)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    train_iterator, dev_iterator = BucketIterator.splits((train_data, dev_data),
-                                                         batch_size=batch_size,
-                                                         device=device)
+
+    train_iterator = BucketIterator(train_data, batch_size=batch_size, train=True, 
+                                    sort_within_batch=True, sort_key=lambda x: (len(x.src), len(x.trg)),
+                                    repeat=False, device=device)
+    dev_iterator = BucketIterator(dev_data, batch_size=1, train=False, sort=False, repeat=False, device=device)
     return train_iterator, dev_iterator, SRC, TRG
 

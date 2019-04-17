@@ -90,3 +90,44 @@ class HyperParams():
     def dict(self):
         """ Give dict-like access to Params """
         return self.__dict__
+
+def batch_reverse_tokenization(batch, eos_index, itos):
+    """
+    Convert the token IDs to words in a batch
+
+    Arguments:
+        batch: a tensor containg the decoded examples (with word ids representing the sequence)
+        eos_index: the index of </s> token
+        itos: idx2word dictionary mapping for the target language
+    """
+    sentences = []
+    for example in batch:
+        sentence = []
+        for token_id in example:
+            token_id = int(token_id.item())
+            if token_id == eos_index:
+                break
+            sentence.append(itos[token_id])
+        sentences.append(sentence)
+    return sentences
+
+
+def output_decoded_sentences_to_file(outputs, model_dir, filename):
+    """
+    Output a lsit of decoded sentences to a file
+
+    Arguments:
+        outputs: list of decoded sentences from the model (translations)
+        model_dir: directory of the `model`
+        filename: name of the file to output the decoded sentences
+    """
+
+    filepath = os.path.join(model_dir + "/outputs/", filename)
+
+    if not os.path.exists(model_dir + "/outputs"):
+        os.mkdir(model_dir + "/outputs")
+
+    with open(filepath, "w") as f:
+        for sentence in outputs:
+            sentence = " ".join(sentence)
+ 

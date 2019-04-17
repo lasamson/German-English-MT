@@ -3,76 +3,50 @@
 import argparse
 import os
 import torch
-from utils.utils import HyperParams, load_dataset, load_checkpoint
-from models.Seq2SeqAttn import Encoder, Decoder, Seq2SeqAttn
+from utils.data_loader import load_dataset
+from utils.utils import HyperParams, load_checkpoint, batch_reverse_tokenization, output_decoded_sentences_to_file
+from models.seq2seq import Encoder, Decoder, Seq2Seq
 
-def output_decoded_sentences_to_file(outputs, model_dir, filename):
-    """
-    Output the decoded sentences to a file
-
-    Arguments:
-        outputs: list of decoded sentences from the model
-        model_dir: directory of the `model`
-        filename: name of the file to output the decoded sentences
-    """
-
-    filepath = os.path.join(model_dir + "/outputs/", filename)
-
-    if not os.path.exists(model_dir + "/outputs"):
-        os.mkdir(model_dir + "/outputs")
-
-    with open(filepath, "w") as f:
-        for sentence in outputs:
-            sentence = " ".join(sentence)
-            f.write(sentence + "\n")
-
-def batch_reverse_tokenization(batch, params):
-    """
-    Converts the token IDs to actual words in a batch
-
-    Arguments:
-        batch: a tensor of containing the decoded examples (with word ids in the cells)
-        params: params of the `model`
-    """
-    sentences = []
-    for example in batch:
-        sentence = [params.itos[example[i]] for i in range(batch.size(1))]
-        sentences.append(sentence)
-    return sentences
-
-def greedy_decoding(model, dev_iter, params):
-    """ Do greedy decoding a trained model
+def greedy_decoding(model, dev_iter, params, max_len, device):
+    """ 
+    Perform greedy decoding a trained model
 
     Arguments:
         model: trained Seq2Seq model
         dev_iter: BucketIterator for the Dev Set
         params: parameters related to the `model`
+        max_len: maximum length of target sequence
+        device: cpu or gpu 
     """
 
     decoded_sentences = []
     model.eval()
     with torch.no_grad():
-        for index, batch in enumerate(dev_iter):
-            src, trg = batch.src, batch.trg
-            print(src.size(), trg.size())
-
+        for _, batch in enumerate(dev_iter):
+            src, _ = batch.src
             if params.cuda:
-                src, trg = src.cuda(), trg.cuda()
+                src = src.cuda()
+            hidden = model.encoder(src)
+            hidden = hidden[:model.decoder.num_layers]
 
-            output = model(src, trg, tf_ratio = 0.0)
-            _, output = torch.max(output, 2)
-            print(output.size())
-            tokens = batch_reverse_tokenization(output, params)
+            decoder_input = torch.LongTensor([[params.sos_index] for _ in range(src.size(0))], device=device).squeeze(1)  # (batch_size)
+            decoded_batch = torch.zeros((src.size(0), max_len))
+            
+            for t in range(max_len):
+                output, hidden = model.decoder(decoder_input, hidden)
+                pred = output.max(1)[1]
+                decoded_batch[:, t] = pred
+                decoder_input = pred
+
+            tokens = batch_reverse_tokenization(decoded_batch, params.eos_index, params.itos)
+            print(tokens)
             decoded_sentences.extend(tokens)
-
-    print(len(decoded_sentences))
-    print(decoded_sentences[0:2])
     return decoded_sentences
 
 def beam_search():
     pass
 
-def main(data_path, greedy, beam_size):
+def main(params, greedy, beam_size):
     """
     The main function for decoding a trained MT model
 
@@ -81,35 +55,38 @@ def main(data_path, greedy, beam_size):
         greedy: whether or not to do greedy decoding
         beam_size: size of beam if doing beam search
     """
-
-    train_iter, dev_iter, DE, EN = load_dataset(params.data_path, params.min_freq, params.batch_size)
+    _, dev_iter, DE, EN = load_dataset(params.data_path, params.min_freq, params.batch_size)
     de_size, en_size = len(DE.vocab), len(EN.vocab)
-    params.vocab_size = en_size
     params.pad_token = EN.vocab.stoi["<pad>"]
+    params.eos_index = EN.vocab.stoi["</s>"]
+    params.sos_index = EN.vocab.stoi["<s>"]
     params.itos = EN.vocab.itos
 
     # instantiate the Seq2Seq model
-    encoder = Encoder(input_size=de_size, embed_size=params.embed_size,
-                      hidden_size=params.hidden_size, num_layers=params.n_layers_enc)
-    decoder = Decoder(output_size=en_size, embed_size=params.embed_size,
-                      hidden_size=params.hidden_size, num_layers=params.n_layers_dec)
-    seq2seq = Seq2SeqAttn(encoder, decoder).cuda() if params.cuda else Seq2SeqAttn(encoder, decoder)
+    encoder = Encoder(src_vocab_size=de_size, embed_size=params.embed_size,
+                      hidden_size=params.hidden_size, enc_dropout=params.enc_dropout, num_layers=params.n_layers_enc)
+    decoder = Decoder(trg_vocab_size=en_size, embed_size=params.embed_size,
+                      hidden_size=params.hidden_size, dec_dropout=params.dec_dropout, num_layers=params.n_layers_dec)
+    device = torch.device("cuda" if params.cuda else "cpu")
+    seq2seq = Seq2Seq(encoder, decoder, device).to(device)
 
     model_path = os.path.join(args.model_dir+"/checkpoints/", params.model_file)
     print("Restoring parameters from {}".format(model_path))
     load_checkpoint(model_path, seq2seq)
 
     if greedy:
-        outputs = greedy_decoding(seq2seq, dev_iter, params)
+        outputs = greedy_decoding(seq2seq, dev_iter, params, 50, device) # change to dev iter
+        output_decoded_sentences_to_file(outputs, params.model_dir, "greedy_outputs.txt")
 
-    output_decoded_sentences_to_file(outputs, params.model_dir, "greedy_outputs.txt")
+    if beam_size:
+        pass
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description="Obtain BLEU scores for trained models")
     p.add_argument("-data_path", type=str, help="location of data")
     p.add_argument("-model_dir", type=str, help="Directory containing model")
-    p.add_argument("-model_file", type=str, help="Model file")
-    p.add_argument("-greedy", type=bool, default=True, help="Greedy Decoding on outputs")
+    p.add_argument("-model_file", type=str, help="Model file (must be contained in the `checkpoints` directory in model_dir)")
+    p.add_argument("-greedy", type=bool, default=True, help="greedy decoding on outputs")
     p.add_argument("-beam_size", default=False, help="Beam Search on outputs")
 
     args = p.parse_args()
