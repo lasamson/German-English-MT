@@ -143,6 +143,7 @@ def main(params):
         train_loss_avg = train_model(epoch, model, optimizer, train_iter, params)
         epoch_end_time = time.time()
         epoch_mins, epoch_secs = epoch_time(epoch_start_time, epoch_end_time)
+        logging.info(f'Epoch: {epoch+1:02} | Avg Train Loss: {train_loss_avg} | Time: {epoch_mins}m {epoch_secs}s')
 
         # evaluate the model on the dev set
         val_loss = float('inf')
