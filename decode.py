@@ -49,8 +49,31 @@ def greedy_decoding(model, dev_iter, params, max_len, device):
             decoded_sentences.extend(tokens)
     return decoded_sentences
 
-def beam_search():
-    pass
+
+def beam_search(model, dev_iter, params, beam_width=5):
+    decoded_sentences = []
+    model.eval()
+    with torch.no_grad():
+        for index, batch in enumerate(dev_iter):
+            outputs = []
+            src, trg = batch.src, batch.trg
+            print(src.size(), trg.size())
+
+            if params.cuda:
+                src, trg = src.cuda(), trg.cuda()
+
+            for i, sent in range(len(batch)):
+                pass
+                output = model(src[i], trg[i], tf_ratio=0.0)
+                print(output.size())
+                outputs.append(output)
+            tokens = batch_reverse_tokenization(outputs, params)
+            decoded_sentences.extend(tokens)
+
+    print(len(decoded_sentences))
+    print(decoded_sentences[0:2])
+    return decoded_sentences
+
 
 def main(params, greedy, beam_size):
     """
@@ -98,9 +121,9 @@ def main(params, greedy, beam_size):
     if greedy:
         outputs = greedy_decoding(model, dev_iter, params, 50, device) # change to dev iter
         output_decoded_sentences_to_file(outputs, params.model_dir, "greedy_outputs.txt")
-
     if beam_size:
         pass
+
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description="Obtain BLEU scores for trained models")
@@ -124,4 +147,3 @@ if __name__ == "__main__":
     params.cuda = torch.cuda.is_available()
 
     main(params, args.greedy, args.beam_size)
-
