@@ -108,7 +108,6 @@ class HyperParams():
         return self.__dict__
 
 
-<<<<<<< HEAD
 def batch_reverse_tokenization(batch, eos_index, itos):
     """
     Convert a batch of sequences of word IDs to words in a batch
