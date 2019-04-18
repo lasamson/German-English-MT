@@ -3,10 +3,12 @@ import argparse
 import os
 import torch
 from utils.data_loader import load_dataset
-from models.seq2seq import Encoder, Decoder, AttentionDecoder, Seq2Seq 
+from models.seq2seq import Encoder, Decoder, AttentionDecoder, Seq2Seq
 from models.attention import DotProductAttention, BahdanauAttention
 from utils.utils import HyperParams, load_checkpoint, batch_reverse_tokenization, output_decoded_sentences_to_file
+from utils.beam_search import beam_decode
 from models.seq2seq import Encoder, Decoder, Seq2Seq
+
 
 def greedy_decoding(model, dev_iter, params, max_len, device):
     """ 
@@ -38,7 +40,7 @@ def greedy_decoding(model, dev_iter, params, max_len, device):
 
             # hold the translated sentences
             decoded_batch = torch.zeros((src.size(0), max_len))
-            
+
             for t in range(max_len):
                 predictions, hidden, _ = model.decoder(decoder_input, hidden, src_mask, output)
                 pred = predictions.max(1)[1]
@@ -50,28 +52,29 @@ def greedy_decoding(model, dev_iter, params, max_len, device):
     return decoded_sentences
 
 
-def beam_search(model, dev_iter, params, beam_width=5):
+def beam_search(model, dev_iter, params, device, beam_width=5, num_sentences=3):
     decoded_sentences = []
     model.eval()
     with torch.no_grad():
         for index, batch in enumerate(dev_iter):
             outputs = []
-            src, trg = batch.src, batch.trg
-            print(src.size(), trg.size())
+            src, src_lengths = batch.src
+            src_mask = (src != params.pad_token).unsqueeze(-2)
+
+            print("SRC: ", src.size())
 
             if params.cuda:
-                src, trg = src.cuda(), trg.cuda()
+                src = src.cuda()
 
-            for i, sent in range(len(batch)):
-                pass
-                output = model(src[i], trg[i], tf_ratio=0.0)
-                print(output.size())
-                outputs.append(output)
-            tokens = batch_reverse_tokenization(outputs, params)
+            # run the src langauge through the Encoder
+            # output => [l, n, num_directions*hidden_size], hidden => [num_layers*num_directions, n, hidden_size]
+            output, hidden = model.encoder(src, src_lengths)
+            hidden = hidden[:model.decoder.num_layers]
+
+            translations = beam_decode(model.decoder, src.size(0), hidden, output, params.sos_index, params.eos_index, beam_width, num_sentences, src_mask, device)
+
+            tokens = batch_reverse_tokenization(translations, params.eos_index, params.itos)
             decoded_sentences.extend(tokens)
-
-    print(len(decoded_sentences))
-    print(decoded_sentences[0:2])
     return decoded_sentences
 
 
@@ -97,32 +100,34 @@ def main(params, greedy, beam_size):
     if "attention" in vars(params):
         print("Decoding from Seq2Seq w/ ({0}) Attention...".format(params.attention))
         encoder = Encoder(src_vocab_size=de_size, embed_size=params.embed_size,
-                        hidden_size=params.hidden_size, enc_dropout=params.enc_dropout, 
-                        num_layers=params.n_layers_enc)
+                          hidden_size=params.hidden_size, enc_dropout=params.enc_dropout,
+                          num_layers=params.n_layers_enc)
         decoder = AttentionDecoder(trg_vocab_size=en_size, embed_size=params.embed_size,
-                        hidden_size=params.hidden_size, dec_dropout=params.dec_dropout, 
-                        attention=params.attention, num_layers=params.n_layers_dec)
+                                   hidden_size=params.hidden_size, dec_dropout=params.dec_dropout,
+                                   attention=params.attention, num_layers=params.n_layers_dec)
     else:
         print("Decoding from regular Seq2Seq model...")
         encoder = Encoder(src_vocab_size=de_size, embed_size=params.embed_size,
-                        hidden_size=params.hidden_size, enc_dropout=params.enc_dropout, 
-                        num_layers=params.n_layers_enc)
+                          hidden_size=params.hidden_size, enc_dropout=params.enc_dropout,
+                          num_layers=params.n_layers_enc)
         decoder = Decoder(trg_vocab_size=en_size, embed_size=params.embed_size,
-                        hidden_size=params.hidden_size, dec_dropout=params.dec_dropout, 
-                        num_layers=params.n_layers_dec)
+                          hidden_size=params.hidden_size, dec_dropout=params.dec_dropout,
+                          num_layers=params.n_layers_dec)
 
     model = Seq2Seq(encoder, decoder, device).to(device)
 
     # load the saved model
-    model_path = os.path.join(args.model_dir+"/checkpoints/", params.model_file)
+    model_path = os.path.join(args.model_dir + "/checkpoints/", params.model_file)
     print("Restoring parameters from {}".format(model_path))
     load_checkpoint(model_path, model)
 
     if greedy:
-        outputs = greedy_decoding(model, dev_iter, params, 50, device) # change to dev iter
+        outputs = greedy_decoding(model, dev_iter, params, 50, device)  # change to dev iter
         output_decoded_sentences_to_file(outputs, params.model_dir, "greedy_outputs.txt")
     if beam_size:
-        pass
+        print("Doing Beam Search...")
+        outputs = beam_search(model, dev_iter, params, device, beam_width=beam_size, num_sentences=5)
+        output_decoded_sentences_to_file(outputs, params.model_dir, "beam_search_outputs.txt")
 
 
 if __name__ == "__main__":
@@ -131,7 +136,7 @@ if __name__ == "__main__":
     p.add_argument("-model_dir", type=str, help="Directory containing model")
     p.add_argument("-model_file", type=str, help="Model file (must be contained in the `checkpoints` directory in model_dir)")
     p.add_argument("-greedy", type=bool, default=True, help="greedy decoding on outputs")
-    p.add_argument("-beam_size", default=False, help="Beam Search on outputs")
+    p.add_argument("-beam_size", type=int, default=False, help="Beam Search on outputs")
 
     args = p.parse_args()
 
