@@ -60,6 +60,12 @@ def set_logger(log_path):
         stream_handler.setFormatter(logging.Formatter('%(message)s'))
         logger.addHandler(stream_handler)
 
+def epoch_time(start_time, end_time):
+    """ Calculate the time to train a `model` on a single epoch """
+    elapsed_time = end_time - start_time
+    elapsed_mins = int(elapsed_time / 60)
+    elapsed_secs = int(elapsed_time - (elapsed_mins * 60))
+    return elapsed_mins, elapsed_secs
 
 class RunningAverage():
     """ A class that maintains the running average of a quanity """
@@ -91,10 +97,10 @@ class HyperParams():
         """ Give dict-like access to Params """
         return self.__dict__
 
+
 def batch_reverse_tokenization(batch, eos_index, itos):
     """
-    Convert the token IDs to words in a batch
-
+    Convert a batch of sequences of word IDs to words in a batch
     Arguments:
         batch: a tensor containg the decoded examples (with word ids representing the sequence)
         eos_index: the index of </s> token
@@ -114,20 +120,16 @@ def batch_reverse_tokenization(batch, eos_index, itos):
 
 def output_decoded_sentences_to_file(outputs, model_dir, filename):
     """
-    Output a lsit of decoded sentences to a file
-
+    Output a list of decoded sentences to a file
     Arguments:
         outputs: list of decoded sentences from the model (translations)
         model_dir: directory of the `model`
         filename: name of the file to output the decoded sentences
     """
-
     filepath = os.path.join(model_dir + "/outputs/", filename)
-
     if not os.path.exists(model_dir + "/outputs"):
         os.mkdir(model_dir + "/outputs")
-
     with open(filepath, "w") as f:
         for sentence in outputs:
             sentence = " ".join(sentence)
- 
+            f.write(sentence + '\n')

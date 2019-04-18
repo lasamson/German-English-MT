@@ -6,16 +6,17 @@ from torch import optim
 from torch.nn.utils import clip_grad_norm
 from torch.nn import functional as F
 from utils.data_loader import load_dataset
-from models.seq2seq import Encoder, Decoder, Seq2Seq
-from utils.utils import HyperParams, set_logger, load_checkpoint, save_checkpoint, RunningAverage
+from models.seq2seq import Encoder, AttentionDecoder, Decoder, Seq2Seq
+from models.attention import DotProductAttention, BahdanauAttention
+from utils.utils import HyperParams, set_logger, load_checkpoint, save_checkpoint, RunningAverage, epoch_time
 import os, sys
 import logging
 import time
+import math
 
 def evaluate_loss_on_dev(model, dev_iter, params):
     """
     Evaluate the loss of the `model` on the dev set
-
     Arguments:
         model: the neural network
         dev_iter: BucketIterator for the dev set
@@ -26,14 +27,15 @@ def evaluate_loss_on_dev(model, dev_iter, params):
     criterion = nn.CrossEntropyLoss(ignore_index=params.pad_token)
     loss_avg = RunningAverage()
     with torch.no_grad():
-        for index, batch in enumerate(dev_iter):
+        for _, batch in enumerate(dev_iter):
             src, src_lengths = batch.src
             trg, trg_lengths = batch.trg
+            src_mask = (src != params.pad_token).unsqueeze(-2)
 
             if params.cuda:
                 src, trg = src.cuda(), trg.cuda()
 
-            output = model(src, trg, src_lengths, trg_lengths, tf_ratio=0.0)
+            output = model(src, trg, src_lengths, trg_lengths, src_mask, tf_ratio=0.0)
             output = output[:, :-1, :].contiguous().view(-1, params.vocab_size)
             trg = trg[:, 1:].contiguous().view(-1)
 
@@ -46,7 +48,6 @@ def evaluate_loss_on_dev(model, dev_iter, params):
 def train_model(epoch_num, model, optimizer, train_iter, params):
     """
     Train the Model for one epoch on the training set
-
     Arguments:
         epoch_num: epoch number during training
         model: the neural network
@@ -54,18 +55,18 @@ def train_model(epoch_num, model, optimizer, train_iter, params):
         train_iter: BucketIterator over the training data
         params: hyperparameters for the `model`
     """
-
     model.train()
     criterion = nn.CrossEntropyLoss(ignore_index=params.pad_token)
     loss_avg = RunningAverage()
     for index, batch in enumerate(train_iter):
-        src, _ = batch.src
-        trg, _ = batch.trg
+        src, src_lengths = batch.src
+        trg, trg_lengths = batch.trg
+        src_mask = (src != params.pad_token).unsqueeze(-2)
 
         if params.cuda:
             src, trg = src.cuda(), trg.cuda()
 
-        output = model(src, trg, tf_ratio=params.teacher_forcing_ratio)
+        output = model(src, trg, src_lengths, trg_lengths, src_mask, tf_ratio=params.teacher_forcing_ratio)
         output = output[:, :-1, :].contiguous().view(-1, params.vocab_size)
         trg = trg[:, 1:].contiguous().view(-1)
 
@@ -84,20 +85,11 @@ def train_model(epoch_num, model, optimizer, train_iter, params):
         if index % 50 == 0 and index != 0:
             logging.info("[%d][loss:%5.2f][pp:%5.2f]" %
                                     (index, loss_avg(), math.exp(loss_avg())))
-        break
     return loss_avg()
-
-def epoch_time(start_time, end_time):
-    """ Calculate time to train a single Epoch in minutes and seconds """
-    elapsed_time = end_time - start_time
-    elapsed_mins = int(elapsed_time / 60)
-    elapsed_secs = int(elapsed_time - (elapsed_mins * 60))
-    return elapsed_mins, elapsed_secs
 
 def main(params):
     """
     The main function for training the Seq2Seq model with Dot-Product Attention
-
     Arguments:
         params: hyperparameters for the model
         model_dir: directory of the model
@@ -105,33 +97,40 @@ def main(params):
     """
 
     logging.info("Loading the datasets...")
-    train_iter, dev_iter, DE, EN = load_dataset(params.data_path, params.min_freq, params.batch_size)
+    train_iter, dev_iter, DE, EN = load_dataset(params.data_path, params.min_freq, params.train_batch_size, params.dev_batch_size)
     de_size, en_size = len(DE.vocab), len(EN.vocab)
     logging.info("[DE Vocab Size]: {}, [EN Vocab Size]: {}".format(de_size, en_size))
     logging.info("- done.")
 
-    print("Most common words (src):")
-    print("\n".join(["%10s %10d" % x for x in DE.vocab.freqs.most_common(10)]), "\n")
-    print("Most common words (trg):")
-    print("\n".join(["%10s %10d" % x for x in EN.vocab.freqs.most_common(10)]), "\n") 
-
     params.vocab_size = en_size
     params.pad_token = EN.vocab.stoi["<pad>"]
 
-    # Instantiate the Seq2Seq model
-    encoder = Encoder(src_vocab_size=de_size, embed_size=params.embed_size,
-                      hidden_size=params.hidden_size, enc_dropout=params.enc_dropout, num_layers=params.n_layers_enc)
-    decoder = Decoder(trg_vocab_size=en_size, embed_size=params.embed_size,
-                      hidden_size=params.hidden_size, dec_dropout=params.dec_dropout, num_layers=params.n_layers_dec)
     device = torch.device('cuda' if params.cuda else 'cpu')
-    seq2seq = Seq2Seq(encoder, decoder, device).to(device)
 
-    optimizer = optim.Adam(seq2seq.parameters(), lr=params.lr)
+    if "attention" in vars(params):
+        logging.info("Running Seq2Seq w/ ({0}) Attention...".format(params.attention))
+        encoder = Encoder(src_vocab_size=de_size, embed_size=params.embed_size,
+                        hidden_size=params.hidden_size, enc_dropout=params.enc_dropout, 
+                        num_layers=params.n_layers_enc)
+        decoder = AttentionDecoder(trg_vocab_size=en_size, embed_size=params.embed_size,
+                        hidden_size=params.hidden_size, dec_dropout=params.dec_dropout, 
+                        attention=params.attention, num_layers=params.n_layers_dec)
+    else:
+        logging.info("Running regular Seq2Seq model...")
+        encoder = Encoder(src_vocab_size=de_size, embed_size=params.embed_size,
+                        hidden_size=params.hidden_size, enc_dropout=params.enc_dropout, 
+                        num_layers=params.n_layers_enc)
+        decoder = Decoder(trg_vocab_size=en_size, embed_size=params.embed_size,
+                        hidden_size=params.hidden_size, dec_dropout=params.dec_dropout, 
+                        num_layers=params.n_layers_dec)
+
+    model = Seq2Seq(encoder, decoder, device).to(device)
+    optimizer = optim.Adam(model.parameters(), lr=params.lr)
 
     if params.restore_file:
         restore_path = os.path.join(params.model_dir+"/checkpoints/", params.restore_file)
         logging.info("Restoring parameters from {}".format(restore_path))
-        load_checkpoint(restore_path, seq2seq, optimizer)
+        load_checkpoint(restore_path, model, optimizer)
 
     best_val_loss = float('inf')
 
@@ -141,28 +140,28 @@ def main(params):
 
         # train the model for one epcoh
         epoch_start_time = time.time()
-        train_loss_avg = train_model(epoch, seq2seq, optimizer, train_iter, params)
+        train_loss_avg = train_model(epoch, model, optimizer, train_iter, params)
         epoch_end_time = time.time()
         epoch_mins, epoch_secs = epoch_time(epoch_start_time, epoch_end_time)
         logging.info(f'Epoch: {epoch+1:02} | Avg Train Loss: {train_loss_avg} | Time: {epoch_mins}m {epoch_secs}s')
 
         # evaluate the model on the dev set
-        val_loss = float("inf")
-        #  val_loss = evaluate_loss_on_dev(seq2seq, dev_iter, params)
-        #  logging.info("Val loss after {} epochs: {}".format(epoch+1, val_loss))
+        val_loss = float('inf')
+        # val_loss = evaluate_loss_on_dev(model, dev_iter, params)
+        # logging.info("Val loss after {} epochs: {}".format(epoch+1, val_loss))
         is_best = val_loss <= best_val_loss
 
         # save checkpoint
         save_checkpoint({
             "epoch": epoch+1,
-            "state_dict": seq2seq.state_dict(),
+            "state_dict": model.state_dict(),
             "optim_dict": optimizer.state_dict()},
             is_best=is_best,
             checkpoint=params.model_dir+"/checkpoints/")
 
-        #  if val_loss < best_val_loss:
-            #  logging.info("- Found new lowest loss!")
-            #  best_val_loss = val_loss
+        # if val_loss < best_val_loss:
+        #     logging.info("- Found new lowest loss!")
+        #     best_val_loss = val_loss
 
 
 if __name__ == "__main__":
@@ -197,5 +196,5 @@ if __name__ == "__main__":
     # manual seed for reproducing experiments
     torch.manual_seed(2)
     if params.cuda: torch.cuda.manual_seed(2)
-
+    
     main(params)
