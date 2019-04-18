@@ -53,15 +53,22 @@ def greedy_decoding(model, dev_iter, params, max_len, device):
 
 
 def beam_search(model, dev_iter, params, device, beam_width=5, num_sentences=3):
+    """ 
+    Run Beam Search to get translation of the SRC language
+    Arguments:
+        model: the `model` used for translation
+        dev_iter: dev iterator
+        params: list of params related to the training of the `model`
+        device: torch device (cpu/gpu)
+        beam_width: size of the beam
+        num_sentences: max number of `hypothesis` to complete before ending beam search
+    """
     decoded_sentences = []
     model.eval()
     with torch.no_grad():
         for index, batch in enumerate(dev_iter):
-            outputs = []
             src, src_lengths = batch.src
             src_mask = (src != params.pad_token).unsqueeze(-2)
-
-            print("SRC: ", src.size())
 
             if params.cuda:
                 src = src.cuda()
@@ -71,7 +78,6 @@ def beam_search(model, dev_iter, params, device, beam_width=5, num_sentences=3):
             output, hidden = model.encoder(src, src_lengths)
             hidden = hidden[:model.decoder.num_layers]
             translations = beam_decode(model.decoder, src.size(0), hidden, output, params.sos_index, params.eos_index, beam_width, num_sentences, src_mask, device)
-
             tokens = batch_reverse_tokenization(translations, params.eos_index, params.itos)
             decoded_sentences.extend(tokens)
     return decoded_sentences
@@ -136,11 +142,9 @@ if __name__ == "__main__":
     p.add_argument("-model_dir", type=str, help="Directory containing model")
     p.add_argument("-model_file", type=str, help="Model file (must be contained in the `checkpoints` directory in model_dir)")
     p.add_argument("-greedy", type=bool, default=True, help="greedy decoding on outputs")
-    p.add_argument("-beam_size", type=int, default=False, help="Beam Search on outputs")
+    p.add_argument("-beam_size", type=int, default=5, help="Beam Search on outputs")
 
     args = p.parse_args()
-
-    print(args)
 
     json_params_path = os.path.join(args.model_dir, "params.json")
     assert os.path.isfile(json_params_path), "No JSON configuration file found at {}".format(json_params_path)
