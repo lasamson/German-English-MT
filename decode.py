@@ -70,7 +70,6 @@ def beam_search(model, dev_iter, params, device, beam_width=5, num_sentences=3):
             # output => [l, n, num_directions*hidden_size], hidden => [num_layers*num_directions, n, hidden_size]
             output, hidden = model.encoder(src, src_lengths)
             hidden = hidden[:model.decoder.num_layers]
-
             translations = beam_decode(model.decoder, src.size(0), hidden, output, params.sos_index, params.eos_index, beam_width, num_sentences, src_mask, device)
 
             tokens = batch_reverse_tokenization(translations, params.eos_index, params.itos)
@@ -122,6 +121,7 @@ def main(params, greedy, beam_size):
     load_checkpoint(model_path, model)
 
     if greedy:
+        print("Doing Greedy Decoding...")
         outputs = greedy_decoding(model, dev_iter, params, 50, device)  # change to dev iter
         output_decoded_sentences_to_file(outputs, params.model_dir, "greedy_outputs.txt")
     if beam_size:

@@ -30,7 +30,7 @@ def beam_decode(decoder, N, decoder_hiddens, encoder_outputs, sos_index, eos_ind
     # iterate sentence by sentence
 
     for idx in range(N):
-        decoder_hidden = decoder_hiddens[:, idx, :].unsqueeze(0)
+        decoder_hidden = decoder_hiddens[:, idx, :].unsqueeze(1)
         encoder_output = encoder_outputs[idx, :, :].unsqueeze(0)
 
         decoder_input = torch.LongTensor([sos_index], device=device)
