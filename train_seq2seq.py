@@ -85,6 +85,9 @@ def train_model(epoch_num, model, optimizer, train_iter, params):
         if index % 50 == 0 and index != 0:
             logging.info("[%d][loss:%5.2f][pp:%5.2f]" %
                                     (index, loss_avg(), math.exp(loss_avg())))
+
+        torch.cuda.empty_cache()
+
     return loss_avg()
 
 def main(params):
@@ -146,9 +149,9 @@ def main(params):
         logging.info(f'Epoch: {epoch+1:02} | Avg Train Loss: {train_loss_avg} | Time: {epoch_mins}m {epoch_secs}s')
 
         # evaluate the model on the dev set
-        val_loss = float('inf')
-        # val_loss = evaluate_loss_on_dev(model, dev_iter, params)
-        # logging.info("Val loss after {} epochs: {}".format(epoch+1, val_loss))
+        # val_loss = float('inf')
+        val_loss = evaluate_loss_on_dev(model, dev_iter, params)
+        logging.info("Val loss after {} epochs: {}".format(epoch+1, val_loss))
         is_best = val_loss <= best_val_loss
 
         # save checkpoint
@@ -159,9 +162,9 @@ def main(params):
             is_best=is_best,
             checkpoint=params.model_dir+"/checkpoints/")
 
-        # if val_loss < best_val_loss:
-        #     logging.info("- Found new lowest loss!")
-        #     best_val_loss = val_loss
+        if val_loss < best_val_loss:
+            logging.info("- Found new lowest loss!")
+            best_val_loss = val_loss
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description="Seq2Seq w/ Attention Hyperparameters")

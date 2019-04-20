@@ -1,15 +1,15 @@
 {
     "epochs": 20,
-    "min_freq": 0,
-    "train_batch_size": 5,
+    "min_freq": 5,
+    "train_batch_size": 32,
     "dev_batch_size": 1,
-    "embed_size": 100,
-    "hidden_size": 200,
+    "embed_size": 128,
+    "hidden_size": 128,
     "n_layers_dec": 1,
     "n_layers_enc": 1,
-    "lr": 1e-2,
+    "lr": 1e-3,
     "grad_clip": 10.0,
     "teacher_forcing_ratio": 1.0,
-    "enc_dropout": 0.0,
-    "dec_dropout": 0.0
+    "enc_dropout": 0.2,
+    "dec_dropout": 0.2
 }

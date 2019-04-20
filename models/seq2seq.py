@@ -110,7 +110,7 @@ class Seq2Seq(nn.Module):
         trg_vocab_size = self.decoder.trg_vocab_size
 
         # tensor to store Decoder outputs
-        outputs = torch.zeros(max_seq_len, batch_size, trg_vocab_size).to(self.device)
+        outputs = torch.zeros(max_seq_len, batch_size, trg_vocab_size, device=self.device)
 
         # last hidden state of the Encoder is used as the initial hidden state of the Decoder
         output, hidden = self.encoder(src, src_lengths)
@@ -123,7 +123,7 @@ class Seq2Seq(nn.Module):
 
             # get translated word for the current timestep
             predictions, hidden, _ = self.decoder(batch=input, prev_h=hidden, src_mask=src_mask, encoder_hidden=output)
-
+            
             # save to outputs tensor
             outputs[t - 1] = predictions
 
