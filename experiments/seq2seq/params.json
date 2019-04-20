@@ -1,6 +1,6 @@
 {
-    "epochs": 50,
-    "min_freq": 0,
+    "epochs": 20,
+    "min_freq": 5,
     "train_batch_size": 32,
     "dev_batch_size": 1,
     "embed_size": 128,
