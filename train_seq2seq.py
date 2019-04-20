@@ -15,10 +15,9 @@ import time
 import math
 from tqdm import tqdm
 
-
 class Trainer(object):
     """
-    Class to train Seq2Seq based models
+    Class to handle the training of Seq2Seq based models
     """
     def __init__(self, model, optimizer, num_epochs, train_iter, dev_iter, params):
         self.model = model
