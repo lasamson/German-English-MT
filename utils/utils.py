@@ -86,7 +86,6 @@ class RunningAverage():
 
 class HyperParams():
     """ Class that loads hyperparams for a particular `model` from a JSON file  """
-
     def __init__(self, json_path):
         with open(json_path) as f:
             params = json.load(f)
@@ -106,59 +105,3 @@ class HyperParams():
     def dict(self):
         """ Give dict-like access to Params """
         return self.__dict__
-
-
-def batch_reverse_tokenization(batch, eos_index, itos):
-    """
-    Convert a batch of sequences of word IDs to words in a batch
-    Arguments:
-        batch: a tensor containg the decoded examples (with word ids representing the sequence)
-        eos_index: the index of </s> token
-        itos: idx2word dictionary mapping for the target language
-    """
-    sentences = []
-    for example in batch:
-        sentence = []
-        for token_id in example:
-            token_id = int(token_id.item())
-            if token_id == eos_index:
-                break
-            sentence.append(itos[token_id])
-        sentences.append(sentence)
-    return sentences
-
-
-def output_decoded_sentences_to_file(outputs, model_dir, filename):
-    """
-    Output a list of decoded sentences to a file
-    Arguments:
-        outputs: list of decoded sentences from the model (translations)
-        model_dir: directory of the `model`
-        filename: name of the file to output the decoded sentences
-    """
-    filepath = os.path.join(model_dir + "/outputs/", filename)
-    if not os.path.exists(model_dir + "/outputs"):
-        os.mkdir(model_dir + "/outputs")
-    with open(filepath, "w") as f:
-        for sentence in outputs:
-            sentence = " ".join(sentence)
-            f.write(sentence + '\n')
-
-class BeamSearchNode(object):
-    def __init__(self, previousNode, wordId, logProb, length):
-        '''
-        :param previousNode:
-        :param wordId:
-        :param logProb:
-        :param length:
-        '''
-        self.prevNode = previousNode
-        self.wordid = wordId
-        self.log_p = logProb
-        self.leng = length
-
-    def eval(self, alpha=1.0):
-        reward = 0
-        # Add here a function for shaping a reward
-
-        return self.logp / float(self.leng - 1 + 1e-6) + alpha * reward

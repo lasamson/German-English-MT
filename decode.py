@@ -5,82 +5,115 @@ import torch
 from utils.data_loader import load_dataset
 from models.seq2seq import Encoder, Decoder, AttentionDecoder, Seq2Seq
 from models.attention import DotProductAttention, BahdanauAttention
-from utils.utils import HyperParams, load_checkpoint, batch_reverse_tokenization, output_decoded_sentences_to_file
+from utils.utils import HyperParams, load_checkpoint 
 from utils.beam_search import beam_decode
 from models.seq2seq import Encoder, Decoder, Seq2Seq
 
+class Decode(object):
+    def __init__(self, model, dev_iter, params, device):
+        self.model = model
+        self.dev_iter = dev_iter
+        self.params = params
+        self.device = device
 
-def greedy_decoding(model, dev_iter, params, max_len, device):
-    """ 
-    Perform greedy decoding a trained model
-    Arguments:
-        model: trained Seq2Seq model
-        dev_iter: BucketIterator for the Dev Set
-        params: parameters related to the `model`
-        max_len: maximum length of target sequence
-        device: cpu or gpu 
-    """
+    def greedy_decode(self, max_len):
+        """ 
+        Perform greedy decoding a trained model
+        Arguments:
+            max_len: maximum length of target sequence
+        """
+        decoded_sentences = []
+        self.model.eval()
+        with torch.no_grad():
+            for idx, batch in enumerate(self.dev_iter):
+                src, src_lengths = batch.src
+                src_mask = (src != self.params.pad_token).unsqueeze(-2)
 
-    decoded_sentences = []
-    model.eval()
-    with torch.no_grad():
-        for _, batch in enumerate(dev_iter):
-            src, src_lengths = batch.src
-            src_mask = (src != params.pad_token).unsqueeze(-2)
+                if self.params.cuda:
+                    src = src.cuda()
 
-            if params.cuda:
-                src = src.cuda()
+                # run the src language through the Encoder
+                output, hidden = self.model.encoder(src, src_lengths)
+                hidden = hidden[:self.model.decoder.num_layers]
 
-            # run the src language through the Encoder
-            output, hidden = model.encoder(src, src_lengths)
-            hidden = hidden[:model.decoder.num_layers]
+                # (batch_size,) ==> filled with <s> tokens initially
+                decoder_input = torch.LongTensor([[self.params.sos_index] for _ in range(src.size(0))]).squeeze(1).to(self.device)  # (batch_size)
 
-            # (batch_size,) ==> filled with <s> tokens initially
-            decoder_input = torch.LongTensor([[params.sos_index] for _ in range(src.size(0))], device=device).squeeze(1)  # (batch_size)
+                # hold the translated sentences
+                decoded_batch = torch.zeros((src.size(0), max_len))
 
-            # hold the translated sentences
-            decoded_batch = torch.zeros((src.size(0), max_len))
+                for t in range(max_len):
+                    predictions, hidden, _ = self.model.decoder(decoder_input, hidden, src_mask, output)
+                    pred = predictions.max(1)[1]
+                    decoded_batch[:, t] = pred
+                    decoder_input = pred
 
-            for t in range(max_len):
-                predictions, hidden, _ = model.decoder(decoder_input, hidden, src_mask, output)
-                pred = predictions.max(1)[1]
-                decoded_batch[:, t] = pred
-                decoder_input = pred
+                tokens = self.batch_reverse_tokenization(decoded_batch)
+                decoded_sentences.extend(tokens)
+                if idx % 500 == 0:
+                    print("Decoded {} examples...".format(idx))
+        return decoded_sentences
 
-            tokens = batch_reverse_tokenization(decoded_batch, params.eos_index, params.itos)
-            decoded_sentences.extend(tokens)
-    return decoded_sentences
+    def beam_search(self, beam_width=5, num_sentences=3):
+        """ 
+        Perform Beam Search as a decoding procedure to get translations
+        Arguments:
+            beam_width: size of the beam
+            num_sentences: max number of `hypothesis` to complete before ending beam search
+        """
+        decoded_sentences = []
+        self.model.eval()
+        with torch.no_grad():
+            for index, batch in enumerate(self.dev_iter):
+                src, src_lengths = batch.src
+                src_mask = (src != self.params.pad_token).unsqueeze(-2)
 
+                if params.cuda:
+                    src = src.cuda()
 
-def beam_search(model, dev_iter, params, device, beam_width=5, num_sentences=3):
-    """ 
-    Run Beam Search to get translation of the SRC language
-    Arguments:
-        model: the `model` used for translation
-        dev_iter: dev iterator
-        params: list of params related to the training of the `model`
-        device: torch device (cpu/gpu)
-        beam_width: size of the beam
-        num_sentences: max number of `hypothesis` to complete before ending beam search
-    """
-    decoded_sentences = []
-    model.eval()
-    with torch.no_grad():
-        for index, batch in enumerate(dev_iter):
-            src, src_lengths = batch.src
-            src_mask = (src != params.pad_token).unsqueeze(-2)
+                # run the src langauge through the Encoder
+                # output => [l, n, num_directions*hidden_size], hidden => [num_layers*num_directions, n, hidden_size]
+                output, hidden = self.model.encoder(src, src_lengths)
+                hidden = hidden[:self.model.decoder.num_layers]
+                translations = beam_decode(self.model.decoder, src.size(0), hidden, output, self.params.sos_index, self.params.eos_index, beam_width, num_sentences, src_mask, self.device)
+                tokens = self.batch_reverse_tokenization(translations)
+                decoded_sentences.extend(tokens)
+                if index % 100 == 0:
+                    print("Decoding example {}".format(index))
+        return decoded_sentences
 
-            if params.cuda:
-                src = src.cuda()
+    def batch_reverse_tokenization(self, batch):
+        """
+        Convert a batch of sequences of word IDs to words in a batch
+        Arguments:
+            batch: a tensor containg the decoded examples (with word ids representing the sequence)
+        """
+        sentences = []
+        for example in batch:
+            sentence = []
+            for token_id in example:
+                token_id = int(token_id.item())
+                if token_id == self.params.eos_index:
+                    break
+                sentence.append(self.params.itos[token_id])
+            sentences.append(sentence)
+        return sentences
 
-            # run the src langauge through the Encoder
-            # output => [l, n, num_directions*hidden_size], hidden => [num_layers*num_directions, n, hidden_size]
-            output, hidden = model.encoder(src, src_lengths)
-            hidden = hidden[:model.decoder.num_layers]
-            translations = beam_decode(model.decoder, src.size(0), hidden, output, params.sos_index, params.eos_index, beam_width, num_sentences, src_mask, device)
-            tokens = batch_reverse_tokenization(translations, params.eos_index, params.itos)
-            decoded_sentences.extend(tokens)
-    return decoded_sentences
+    def output_decoded_translations(self, outputs, output_file):
+        """
+        Outputs a list of decoded translations to an output file
+        Arguments:
+            outputs: list of decoded sentences from the model (translations)
+            modeL_dir: directory of the `model`
+            output_file: name of the file to output the translations
+        """
+        filepath = os.path.join(self.params.model_dir + "/outputs/", output_file)
+        if not os.path.exists(self.params.model_dir + "/outputs"):
+            os.mkdir(self.params.model_dir + "/outputs")
+        with open(filepath, "w") as f:
+            for sentence in outputs:
+                sentence = " ".join(sentence)
+                f.write(sentence + '\n')
 
 
 def main(params, greedy, beam_size):
@@ -91,6 +124,7 @@ def main(params, greedy, beam_size):
         greedy: whether or not to do greedy decoding
         beam_size: size of beam if doing beam search
     """
+    print("Loading dataset...")
     _, dev_iter, DE, EN = load_dataset(params.data_path, params.min_freq, params.train_batch_size, params.dev_batch_size)
     de_size, en_size = len(DE.vocab), len(EN.vocab)
     print("[DE Vocab Size: ]: {}, [EN Vocab Size]: {}".format(de_size, en_size))
@@ -126,14 +160,17 @@ def main(params, greedy, beam_size):
     print("Restoring parameters from {}".format(model_path))
     load_checkpoint(model_path, model)
 
+    decoder = Decode(model, dev_iter, params, device)
+
     if greedy:
         print("Doing Greedy Decoding...")
-        outputs = greedy_decoding(model, dev_iter, params, 50, device)  # change to dev iter
-        output_decoded_sentences_to_file(outputs, params.model_dir, "greedy_outputs.txt")
+        greedy_outputs = decoder.greedy_decode(max_len=50)
+        decoder.output_decoded_translations(greedy_outputs, "greedy_outputs.en")
+
     if beam_size:
         print("Doing Beam Search...")
-        outputs = beam_search(model, dev_iter, params, device, beam_width=beam_size, num_sentences=5)
-        output_decoded_sentences_to_file(outputs, params.model_dir, "beam_search_outputs.txt")
+        beam_search_outputs = decoder.beam_search(beam_width=beam_size, num_sentences=5)
+        decoder.output_decoded_translations(beam_search_outputs, "beam_search_outputs_size={}.en".format(beam_size))
 
 
 if __name__ == "__main__":
@@ -141,7 +178,7 @@ if __name__ == "__main__":
     p.add_argument("-data_path", type=str, help="location of data")
     p.add_argument("-model_dir", type=str, help="Directory containing model")
     p.add_argument("-model_file", type=str, help="Model file (must be contained in the `checkpoints` directory in model_dir)")
-    p.add_argument("-greedy", type=bool, default=True, help="greedy decoding on outputs")
+    p.add_argument("-greedy", action="store_true", help="greedy decoding on outputs")
     p.add_argument("-beam_size", type=int, default=5, help="Beam Search on outputs")
 
     args = p.parse_args()
@@ -154,5 +191,5 @@ if __name__ == "__main__":
     params.model_dir = args.model_dir
     params.model_file = args.model_file
     params.cuda = torch.cuda.is_available()
-
+    print(args)
     main(params, args.greedy, args.beam_size)
