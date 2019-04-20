@@ -9,9 +9,9 @@ from utils.utils import HyperParams, load_checkpoint
 from utils.beam_search import beam_decode
 from models.seq2seq import Encoder, Decoder, Seq2Seq
 
-class Decode(object):
+class Translator(object):
     """
-    Decode class that handles Greedy Decoding and Beam Search inorder to obtain translations from the model
+    Translator class that handles Greedy Decoding and Beam Search inorder to obtain translations from the model
     """
     def __init__(self, model, dev_iter, params, device):
         self.model = model
@@ -137,23 +137,20 @@ def main(params, greedy, beam_size):
 
     device = torch.device("cuda" if params.cuda else "cpu")
     print("Device: {}".format(device))
+    encoder = Encoder(src_vocab_size=de_size, embed_size=params.embed_size,
+                    hidden_size=params.hidden_size, input_dropout_p=params.input_dropout_p_enc,
+                    num_layers=params.n_layers_enc, dropout_p=params.dropout_p)
 
     if "attention" in vars(params):
         print("Decoding from Seq2Seq w/ ({0}) Attention...".format(params.attention))
-        encoder = Encoder(src_vocab_size=de_size, embed_size=params.embed_size,
-                          hidden_size=params.hidden_size, enc_dropout=params.enc_dropout,
-                          num_layers=params.n_layers_enc)
         decoder = AttentionDecoder(trg_vocab_size=en_size, embed_size=params.embed_size,
-                                   hidden_size=params.hidden_size, dec_dropout=params.dec_dropout,
-                                   attention=params.attention, num_layers=params.n_layers_dec)
+                                   hidden_size=params.hidden_size, input_dropout_p=params.input_dropout_p_dec,
+                                   dropout_p=params.dropout_p, attention=params.attention, num_layers=params.n_layers_dec)
     else:
         print("Decoding from regular Seq2Seq model...")
-        encoder = Encoder(src_vocab_size=de_size, embed_size=params.embed_size,
-                          hidden_size=params.hidden_size, enc_dropout=params.enc_dropout,
-                          num_layers=params.n_layers_enc)
         decoder = Decoder(trg_vocab_size=en_size, embed_size=params.embed_size,
-                          hidden_size=params.hidden_size, dec_dropout=params.dec_dropout,
-                          num_layers=params.n_layers_dec)
+                          hidden_size=params.hidden_size, input_dropout_p=params.input_dropout_p_dec,
+                          dropout_p=params.dropout_p, num_layers=params.n_layers_dec)
 
     model = Seq2Seq(encoder, decoder, device).to(device)
 
@@ -162,7 +159,8 @@ def main(params, greedy, beam_size):
     print("Restoring parameters from {}".format(model_path))
     load_checkpoint(model_path, model)
 
-    decoder = Decode(model, dev_iter, params, device)
+    # instantiate a Translator object to translate SRC langauge using Greedy/Beam Decoding
+    decoder = Translator(model, dev_iter, params, device)
 
     if greedy:
         print("Doing Greedy Decoding...")
