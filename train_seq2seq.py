@@ -65,10 +65,6 @@ class Trainer(object):
                 pp.update(math.exp(loss_avg()))
                 t.set_postfix(loss='{:05.3f}'.format(loss_avg()), pp='{}'.format(pp()))
                 t.update()
-
-                if index % 100 == 0 and index != 0:
-                    print("[%d][loss:%5.2f][pp:%5.2f]" %
-                                            (index, loss_avg(), pp()))
                 torch.cuda.empty_cache()
         return loss_avg(), pp()
 
