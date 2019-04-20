@@ -62,13 +62,6 @@ def set_logger(log_path):
         stream_handler.setFormatter(logging.Formatter('%(message)s'))
         logger.addHandler(stream_handler)
 
-def epoch_time(start_time, end_time):
-    """ Calculate the time to train a `model` on a single epoch """
-    elapsed_time = end_time - start_time
-    elapsed_mins = int(elapsed_time / 60)
-    elapsed_secs = int(elapsed_time - (elapsed_mins * 60))
-    return elapsed_mins, elapsed_secs
-
 class RunningAverage():
     """ A class that maintains the running average of a quanity """
 

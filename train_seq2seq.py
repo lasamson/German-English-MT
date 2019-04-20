@@ -8,84 +8,170 @@ from torch.nn import functional as F
 from utils.data_loader import load_dataset
 from models.seq2seq import Encoder, AttentionDecoder, Decoder, Seq2Seq
 from models.attention import DotProductAttention, BahdanauAttention
-from utils.utils import HyperParams, set_logger, load_checkpoint, save_checkpoint, RunningAverage, epoch_time
-import os, sys
+from utils.utils import HyperParams, set_logger, RunningAverage
+import os, sys, shutil
 import logging
 import time
 import math
+from tqdm import tqdm
 
-def evaluate_loss_on_dev(model, dev_iter, params):
+
+class Trainer(object):
     """
-    Evaluate the loss of the `model` on the dev set
-    Arguments:
-        model: the neural network
-        dev_iter: BucketIterator for the dev set
-        params: hyperparameters for the `model`
+    Class to train Seq2Seq based models
     """
+    def __init__(self, model, optimizer, num_epochs, train_iter, dev_iter, params):
+        self.model = model
+        self.optimizer = optimizer
+        self.train_iter = train_iter
+        self.dev_iter = dev_iter
+        self.params = params
+        self.epoch = 0
+        self.max_num_epochs = num_epochs
+        self.best_val_loss = float("inf")
+    
+    def train_epoch(self):
+        """
+        Train `model` for one epoch
+        """
+        self.model.train()
+        criterion = nn.CrossEntropyLoss(ignore_index=self.params.pad_token)
+        loss_avg = RunningAverage()
+        pp = RunningAverage()
+        with tqdm(total=len(self.train_iter)) as t:
+            for index, batch in enumerate(self.train_iter):
+                src, src_lengths = batch.src
+                trg, trg_lengths = batch.trg
+                src_mask = (src != self.params.pad_token).unsqueeze(-2)
 
-    model.eval()
-    criterion = nn.CrossEntropyLoss(ignore_index=params.pad_token)
-    loss_avg = RunningAverage()
-    with torch.no_grad():
-        for _, batch in enumerate(dev_iter):
-            src, src_lengths = batch.src
-            trg, trg_lengths = batch.trg
-            src_mask = (src != params.pad_token).unsqueeze(-2)
+                if self.params.cuda:
+                    src, trg = src.cuda(), trg.cuda()
 
-            if params.cuda:
-                src, trg = src.cuda(), trg.cuda()
+                output = self.model(src, trg, src_lengths, trg_lengths, src_mask, tf_ratio=self.params.teacher_forcing_ratio)
+                output = output[:, :-1, :].contiguous().view(-1, self.params.vocab_size)
+                trg = trg[:, 1:].contiguous().view(-1)
 
-            output = model(src, trg, src_lengths, trg_lengths, src_mask, tf_ratio=0.0)
-            output = output[:, :-1, :].contiguous().view(-1, params.vocab_size)
-            trg = trg[:, 1:].contiguous().view(-1)
+                assert output.size(0) == trg.size(0)
 
-            assert output.size(0) == trg.size(0)
+                self.optimizer.zero_grad()
+                loss = criterion(output, trg)
+                loss.backward()
 
-            loss = criterion(output, trg)
-            loss_avg.update(loss.item())
-    return loss_avg()
+                nn.utils.clip_grad_norm_(self.model.parameters(), self.params.grad_clip)
+                self.optimizer.step()
 
-def train_model(epoch_num, model, optimizer, train_iter, params):
-    """
-    Train the Model for one epoch on the training set
-    Arguments:
-        epoch_num: epoch number during training
-        model: the neural network
-        optimizer: optimizer for the parameters of the model
-        train_iter: BucketIterator over the training data
-        params: hyperparameters for the `model`
-    """
-    model.train()
-    criterion = nn.CrossEntropyLoss(ignore_index=params.pad_token)
-    loss_avg = RunningAverage()
-    for index, batch in enumerate(train_iter):
-        src, src_lengths = batch.src
-        trg, trg_lengths = batch.trg
-        src_mask = (src != params.pad_token).unsqueeze(-2)
+                # update the average loss
+                loss_avg.update(loss.item())
+                pp.update(math.exp(loss_avg()))
+                t.set_postfix(loss='{:05.3f}'.format(loss_avg()), pp='{}'.format(pp()))
+                t.update()
 
-        if params.cuda:
-            src, trg = src.cuda(), trg.cuda()
+                if index % 100 == 0 and index != 0:
+                    print("[%d][loss:%5.2f][pp:%5.2f]" %
+                                            (index, loss_avg(), pp()))
+                torch.cuda.empty_cache()
+        return loss_avg(), pp()
 
-        output = model(src, trg, src_lengths, trg_lengths, src_mask, tf_ratio=params.teacher_forcing_ratio)
-        output = output[:, :-1, :].contiguous().view(-1, params.vocab_size)
-        trg = trg[:, 1:].contiguous().view(-1)
+    def validate(self):
+        """
+        Evaluate the loss of the `model` on the dev set
+        """
+        self.model.eval()
+        criterion = nn.CrossEntropyLoss(ignore_index=self.params.pad_token)
+        loss_avg = RunningAverage()
+        pp = RunningAverage()
+        with tqdm(total=len(self.dev_iter)) as t:
+            with torch.no_grad():
+                for _, batch in enumerate(self.dev_iter):
+                    src, src_lengths = batch.src
+                    trg, trg_lengths = batch.trg
+                    src_mask = (src != self.params.pad_token).unsqueeze(-2)
 
-        assert output.size(0) == trg.size(0)
+                    if self.params.cuda:
+                        src, trg = src.cuda(), trg.cuda()
 
-        optimizer.zero_grad()
-        loss = criterion(output, trg)
-        loss.backward()
+                    output = self.model(src, trg, src_lengths, trg_lengths, src_mask, tf_ratio=0.0)
+                    output = output[:, :-1, :].contiguous().view(-1, self.params.vocab_size)
+                    trg = trg[:, 1:].contiguous().view(-1)
 
-        nn.utils.clip_grad_norm_(model.parameters(), params.grad_clip)
-        optimizer.step()
+                    assert output.size(0) == trg.size(0)
 
-        # update the average loss
-        loss_avg.update(loss.item())
+                    loss = criterion(output, trg)
+                    loss_avg.update(loss.item())
+                    pp.update(math.exp(loss_avg()))
+                    t.set_postfix(loss='{:05.3f}'.format(loss_avg()), pp='{}'.format(pp()))
+                    t.update()
+        return loss_avg(), pp()
 
-        if index % 50 == 0 and index != 0:
-            logging.info("[%d][loss:%5.2f][pp:%5.2f]" %
-                                    (index, loss_avg(), math.exp(loss_avg())))
-    return loss_avg()
+    def train(self):
+        logging.info("Starting training for {} epoch(s)".format(self.max_num_epochs - self.epoch))
+        for epoch in range(self.max_num_epochs):
+            self.epoch = epoch
+            logging.info("Epoch {}/{}".format(epoch+1, self.max_num_epochs))
+
+            epoch_start_time = time.time()
+            train_loss_avg, train_pp_avg = self.train_epoch()
+            epoch_end_time = time.time()
+            epoch_mins, epoch_secs = self.epoch_time(epoch_start_time, epoch_end_time)
+            logging.info(f'Epoch: {epoch+1:02} | Avg Train Loss: {train_loss_avg} | Avg Train Perplexity: {train_pp_avg} | Time: {epoch_mins}m {epoch_secs}s')
+
+            val_loss_avg, val_pp_avg = self.validate() 
+            logging.info(f'Avg Val Loss: {val_loss_avg} | Avg Val Perplexity: {val_pp_avg}')
+
+            is_best = val_loss_avg < self.best_val_loss
+
+              # save checkpoint
+            self.save_checkpoint({
+                "epoch": epoch+1,
+                "state_dict": self.model.state_dict(),
+                "optim_dict": self.optimizer.state_dict()},
+                is_best=is_best,
+                checkpoint=self.params.model_dir+"/checkpoints/")
+
+            if is_best:
+                logging.info("- Found new lowest loss!")
+                self.best_val_loss = val_loss_avg
+
+    def epoch_time(self, start_time, end_time):
+        """ Calculate the time to train a `model` on a single epoch """
+        elapsed_time = end_time - start_time
+        elapsed_mins = int(elapsed_time / 60)
+        elapsed_secs = int(elapsed_time - (elapsed_mins * 60))
+        return elapsed_mins, elapsed_secs
+    
+    def save_checkpoint(self, state, is_best, checkpoint):
+        """
+        Save a checkpoint of the model
+
+        Arguments:
+            state: dictionary containing information related to the state of the training process
+            is_best: boolean value stating whether the current model got the best val loss
+            checkpoint: folder where parameters are to be saved
+        """
+        filepath = os.path.join(checkpoint, "last.pth.tar")
+        if not os.path.exists(checkpoint):
+            os.mkdir(checkpoint)
+        torch.save(state, filepath)
+        if is_best:
+            shutil.copyfile(filepath, os.path.join(checkpoint, "best.pth.tar"))
+
+    def load_checkpoint(self, checkpoint):
+        """
+        Loads model parameters (state_dict) from file_path. If optimizer is provided
+        loads state_dict of optimizer assuming it is present in checkpoint
+
+        Arguments:
+            checkpoint: filename which needs to be loaded
+            optimizer: resume optimizer from checkpoint
+        """
+
+        if not os.path.exists(checkpoint):
+            raise ("File doesn't exist {}".format(checkpoint))
+        checkpoint = torch.load(checkpoint)
+        self.model.load_state_dict(checkpoint["state_dict"])
+        if self.optimizer:
+            self.optimizer.load_state_dict(checkpoint["optim_dict"])
+        return checkpoint
 
 def main(params):
     """
@@ -126,42 +212,14 @@ def main(params):
 
     model = Seq2Seq(encoder, decoder, device).to(device)
     optimizer = optim.Adam(model.parameters(), lr=params.lr)
+    trainer = Trainer(model, optimizer, params.epochs, train_iter, dev_iter, params)
 
     if params.restore_file:
         restore_path = os.path.join(params.model_dir+"/checkpoints/", params.restore_file)
         logging.info("Restoring parameters from {}".format(restore_path))
-        load_checkpoint(restore_path, model, optimizer)
+        trainer.load_checkpoint(restore_path)
 
-    best_val_loss = float('inf')
-
-    logging.info("Starting training for {} epoch(s)".format(params.epochs))
-    for epoch in range(params.epochs):
-        logging.info("Epoch {}/{}".format(epoch+1, params.epochs))
-
-        # train the model for one epcoh
-        epoch_start_time = time.time()
-        train_loss_avg = train_model(epoch, model, optimizer, train_iter, params)
-        epoch_end_time = time.time()
-        epoch_mins, epoch_secs = epoch_time(epoch_start_time, epoch_end_time)
-        logging.info(f'Epoch: {epoch+1:02} | Avg Train Loss: {train_loss_avg} | Time: {epoch_mins}m {epoch_secs}s')
-
-        # evaluate the model on the dev set
-        val_loss = float('inf')
-        # val_loss = evaluate_loss_on_dev(model, dev_iter, params)
-        # logging.info("Val loss after {} epochs: {}".format(epoch+1, val_loss))
-        is_best = val_loss <= best_val_loss
-
-        # save checkpoint
-        save_checkpoint({
-            "epoch": epoch+1,
-            "state_dict": model.state_dict(),
-            "optim_dict": optimizer.state_dict()},
-            is_best=is_best,
-            checkpoint=params.model_dir+"/checkpoints/")
-
-        # if val_loss < best_val_loss:
-        #     logging.info("- Found new lowest loss!")
-        #     best_val_loss = val_loss
+    trainer.train()
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description="Seq2Seq w/ Attention Hyperparameters")
