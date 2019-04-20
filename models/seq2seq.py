@@ -6,10 +6,8 @@ from torch.autograd import Variable
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from models.attention import DotProductAttention, BahdanauAttention
 
-
 class Encoder(nn.Module):
     """ GRU Encoder that represents the source sentence with a fixed sized representation """
-
     def __init__(self, src_vocab_size, embed_size, hidden_size, enc_dropout, num_layers=1):
         super().__init__()
         self.src_vocab_size = src_vocab_size
@@ -25,7 +23,6 @@ class Encoder(nn.Module):
         packed = pack_padded_sequence(embed, src_lengths, batch_first=True)
         output, hidden = self.gru(packed)  # (batch, num_layers*num_directions, hidden_size)
         output, _ = pad_packed_sequence(output, batch_first=True)
-
         # sum the bidirectional outputs (you could concatenate the two hidden vectors as well)
         # the outputs are from the last layer in the stacked LSTM
         output = (output[:, :, :self.hidden_size] +
@@ -35,7 +32,6 @@ class Encoder(nn.Module):
 
 class AttentionDecoder(nn.Module):
     """ Conditional GRU Decoder w/ Attention """
-
     def __init__(self, trg_vocab_size, embed_size, hidden_size, dec_dropout, attention, num_layers=1):
         super().__init__()
         self.trg_vocab_size = trg_vocab_size
@@ -49,14 +45,13 @@ class AttentionDecoder(nn.Module):
         self.output = nn.Linear(hidden_size * 2, trg_vocab_size)  # concat the attention vector and the regular hidden state
 
     def forward(self, batch, prev_h, src_mask, encoder_hidden):
-
         # embed the current input
         batch = batch.unsqueeze(1)  # (batch, 1)
         embed = self.dropout(self.embed(batch))  # (batch, 1, V)
 
         # calculate attention weights and apply encoder outputs
         projected_keys = self.attention.key_layer(encoder_hidden)  # [batch_size, seq_len, hidden_size]
-        query = prev_h[-1].unsqueeze(1)
+        query = prev_h[-1].unsqueeze(1) # get the top most layer of the decoder GRU as the hidden representation
 
         context, attention_scores = self.attention(
             query=query, projected_keys=projected_keys,
@@ -74,7 +69,6 @@ class AttentionDecoder(nn.Module):
 
 class Decoder(nn.Module):
     """ Conditional GRU Decoder """
-
     def __init__(self, trg_vocab_size, embed_size, hidden_size, dec_dropout, num_layers=1):
         super().__init__()
         self.trg_vocab_size = trg_vocab_size
@@ -97,8 +91,7 @@ class Decoder(nn.Module):
 
 
 class Seq2Seq(nn.Module):
-    """ A Base Seq2Seq Model """
-
+    """ A Base Seq2Seq Model w/ an Encoder-Decoder Architecture """
     def __init__(self, encoder, decoder, device):
         super().__init__()
         self.encoder = encoder
