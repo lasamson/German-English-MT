@@ -29,8 +29,7 @@ def load_dataset(data_path, min_freq=5, train_batch_size=32, dev_batch_size=1):
     MAX_LEN = 50
     train_data, dev_data = datasets.TranslationDataset.splits(exts=(".de", ".en"),
                                     fields=(SRC, TRG), path=data_path, test=None, validation="dev", 
-                                    filter_pred=lambda x: len(vars(x)['src']) <= MAX_LEN and 
-                                    len(vars(x)['trg']) <= MAX_LEN))
+                                    filter_pred=lambda x: len(vars(x)['src']) <= MAX_LEN and len(vars(x)['trg']) <= MAX_LEN))
 
     SRC.build_vocab(train_data.src, min_freq=min_freq)
     TRG.build_vocab(train_data.trg, min_freq=min_freq)
