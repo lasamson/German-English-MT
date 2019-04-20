@@ -8,15 +8,15 @@ from models.attention import DotProductAttention, BahdanauAttention
 
 class Encoder(nn.Module):
     """ GRU Encoder that represents the source sentence with a fixed sized representation """
-    def __init__(self, src_vocab_size, embed_size, hidden_size, enc_dropout, num_layers=1):
+    def __init__(self, src_vocab_size, embed_size, hidden_size, input_dropout_p, dropout_p, num_layers=1):
         super().__init__()
         self.src_vocab_size = src_vocab_size
         self.embed_size = embed_size
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.embed = nn.Embedding(src_vocab_size, embed_size)
-        self.dropout = nn.Dropout(enc_dropout)
-        self.gru = nn.GRU(embed_size, hidden_size, num_layers, bidirectional=True, batch_first=True)
+        self.dropout = nn.Dropout(input_dropout_p)
+        self.gru = nn.GRU(embed_size, hidden_size, num_layers, dropout=dropout_p, bidirectional=True, batch_first=True)
 
     def forward(self, batch, src_lengths=None):
         embed = self.dropout(self.embed(batch))
@@ -32,7 +32,7 @@ class Encoder(nn.Module):
 
 class AttentionDecoder(nn.Module):
     """ Conditional GRU Decoder w/ Attention """
-    def __init__(self, trg_vocab_size, embed_size, hidden_size, dec_dropout, attention, num_layers=1):
+    def __init__(self, trg_vocab_size, embed_size, hidden_size, input_dropout_p, dropout_p, attention, num_layers=1):
         super().__init__()
         self.trg_vocab_size = trg_vocab_size
         self.embed_size = embed_size
@@ -40,8 +40,8 @@ class AttentionDecoder(nn.Module):
         self.num_layers = num_layers
         self.attention = DotProductAttention(hidden_size=hidden_size) if attention == "dot" else BahdanauAttention(hidden_size=hidden_size)
         self.embed = nn.Embedding(trg_vocab_size, embed_size)
-        self.dropout = nn.Dropout(dec_dropout)
-        self.gru = nn.GRU(hidden_size + embed_size, hidden_size, num_layers, batch_first=True)
+        self.dropout = nn.Dropout(input_dropout_p)
+        self.gru = nn.GRU(hidden_size + embed_size, hidden_size, num_layers, dropout=dropout_p, batch_first=True)
         self.output = nn.Linear(hidden_size * 2, trg_vocab_size)  # concat the attention vector and the regular hidden state
 
     def forward(self, batch, prev_h, src_mask, encoder_hidden):
@@ -69,20 +69,21 @@ class AttentionDecoder(nn.Module):
 
 class Decoder(nn.Module):
     """ Conditional GRU Decoder """
-    def __init__(self, trg_vocab_size, embed_size, hidden_size, dec_dropout, num_layers=1):
+    def __init__(self, trg_vocab_size, embed_size, hidden_size, input_dropout_p, dropout_p, num_layers=1):
         super().__init__()
         self.trg_vocab_size = trg_vocab_size
         self.embed_size = embed_size
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.embed = nn.Embedding(trg_vocab_size, embed_size)
-        self.dropout = nn.Dropout(dec_dropout)
-        self.gru = nn.GRU(embed_size, hidden_size, num_layers, batch_first=True)
+        self.dropout = nn.Dropout(input_dropout_p)
+        self.gru = nn.GRU(embed_size, hidden_size, num_layers, dropout=dropout_p, batch_first=True)
         self.output = nn.Linear(hidden_size, trg_vocab_size)
 
     def forward(self, batch, prev_h, src_mask=None, encoder_hidden=None):
         batch = batch.unsqueeze(1)  # (batch, 1)
         embed = self.dropout(self.embed(batch))  # (batch, 1, V)
+
         # initialize the Decoder hidden states with the last hidden states from the Encoder
         outputs, hidden = self.gru(embed, prev_h)
         outputs = outputs.squeeze(1)  # (batch, 1 , hidden_size) => (batch, hidden_size)
