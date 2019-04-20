@@ -10,6 +10,9 @@ from utils.beam_search import beam_decode
 from models.seq2seq import Encoder, Decoder, Seq2Seq
 
 class Decode(object):
+    """
+    Decode class that handles Greedy Decoding and Beam Search inorder to obtain translations from the model
+    """
     def __init__(self, model, dev_iter, params, device):
         self.model = model
         self.dev_iter = dev_iter
@@ -115,7 +118,6 @@ class Decode(object):
                 sentence = " ".join(sentence)
                 f.write(sentence + '\n')
 
-
 def main(params, greedy, beam_size):
     """
     The main function for decoding a trained MT model
@@ -191,5 +193,4 @@ if __name__ == "__main__":
     params.model_dir = args.model_dir
     params.model_file = args.model_file
     params.cuda = torch.cuda.is_available()
-    print(args)
     main(params, args.greedy, args.beam_size)
