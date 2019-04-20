@@ -15,7 +15,6 @@ class BeamSearchNode(object):
         lp = ((5 + self.length) / 6) ** alpha
         return self.log_prob / lp
 
-
 def beam_decode(decoder, N, decoder_hiddens, encoder_outputs, sos_index, eos_index, beam_width, num_sentences, src_mask, device):
     """
     Perform Beam Search (translation) on a single src sequence 
@@ -85,6 +84,7 @@ def beam_decode(decoder, N, decoder_hiddens, encoder_outputs, sos_index, eos_ind
 
         for elem in next_nodes:
             queue.put(elem)
+
         qsize += len(next_nodes) - 1
 
     # if beam search blows up and no full translation are found
@@ -92,6 +92,7 @@ def beam_decode(decoder, N, decoder_hiddens, encoder_outputs, sos_index, eos_ind
     if len(full_sentences) == 0:
         full_sentences = [queue.get() for _ in range(num_sentences)] 
 
+    print(full_sentences)
     full_sentences_sorted = sorted(full_sentences, key=itemgetter(0))
     translation_path = full_sentences_sorted[0][1].prev_node
     utterence = []
@@ -100,7 +101,7 @@ def beam_decode(decoder, N, decoder_hiddens, encoder_outputs, sos_index, eos_ind
     while(translation_path.prev_node != None):
         translation_path = translation_path.prev_node
         utterence.append(translation_path.word_id)
-
+    
     utterence = utterence[::-1]
     utterence = utterence[1:]
 
