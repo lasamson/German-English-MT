@@ -39,7 +39,7 @@ class Trainer(object):
         loss_avg = RunningAverage()
         pp = RunningAverage()
         with tqdm(total=len(self.train_iter)) as t:
-            for index, batch in enumerate(self.train_iter):
+            for idx, batch in enumerate(self.train_iter):
                 src, src_lengths = batch.src
                 trg, trg_lengths = batch.trg
                 src_mask = (src != self.params.pad_token).unsqueeze(-2)
@@ -78,7 +78,7 @@ class Trainer(object):
         pp = RunningAverage()
         with tqdm(total=len(self.dev_iter)) as t:
             with torch.no_grad():
-                for _, batch in enumerate(self.dev_iter):
+                for idx, batch in enumerate(self.dev_iter):
                     src, src_lengths = batch.src
                     trg, trg_lengths = batch.trg
                     src_mask = (src != self.params.pad_token).unsqueeze(-2)
@@ -160,7 +160,6 @@ class Trainer(object):
             checkpoint: filename which needs to be loaded
             optimizer: resume optimizer from checkpoint
         """
-
         if not os.path.exists(checkpoint):
             raise ("File doesn't exist {}".format(checkpoint))
         checkpoint = torch.load(checkpoint)
@@ -188,23 +187,22 @@ def main(params):
     params.pad_token = EN.vocab.stoi["<pad>"]
 
     device = torch.device('cuda' if params.cuda else 'cpu')
+    
+    encoder = Encoder(src_vocab_size=de_size, embed_size=params.embed_size,
+                    hidden_size=params.hidden_size, input_dropout_p=params.input_dropout_p_enc, 
+                    num_layers=params.n_layers_enc, dropout_p=params.dropout_p)
 
     if "attention" in vars(params):
         logging.info("Running Seq2Seq w/ ({0}) Attention...".format(params.attention))
-        encoder = Encoder(src_vocab_size=de_size, embed_size=params.embed_size,
-                        hidden_size=params.hidden_size, enc_dropout=params.enc_dropout, 
-                        num_layers=params.n_layers_enc)
         decoder = AttentionDecoder(trg_vocab_size=en_size, embed_size=params.embed_size,
-                        hidden_size=params.hidden_size, dec_dropout=params.dec_dropout, 
-                        attention=params.attention, num_layers=params.n_layers_dec)
+                        hidden_size=params.hidden_size, input_dropout_p=params.input_dropout_p_dec, 
+                        dropout_p=params.dropout_p, attention=params.attention, 
+                        num_layers=params.n_layers_dec)
     else:
         logging.info("Running regular Seq2Seq model...")
-        encoder = Encoder(src_vocab_size=de_size, embed_size=params.embed_size,
-                        hidden_size=params.hidden_size, enc_dropout=params.enc_dropout, 
-                        num_layers=params.n_layers_enc)
         decoder = Decoder(trg_vocab_size=en_size, embed_size=params.embed_size,
-                        hidden_size=params.hidden_size, dec_dropout=params.dec_dropout, 
-                        num_layers=params.n_layers_dec)
+                        hidden_size=params.hidden_size, input_dropout_p=params.input_dropout_p_dec, 
+                        dropout_p=params.dropout_p, num_layers=params.n_layers_dec)
 
     model = Seq2Seq(encoder, decoder, device).to(device)
     optimizer = optim.Adam(model.parameters(), lr=params.lr)
