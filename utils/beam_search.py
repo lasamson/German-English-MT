@@ -40,6 +40,7 @@ def beam_decode(decoder, N, decoder_hiddens, encoder_outputs, sos_index, eos_ind
 
     # input token to the beam search process
     decoder_input = torch.LongTensor([sos_index], device=device)
+    print("First Input: {}".format(decoder_input))
 
     # num sentences to generate before terminating
     full_sentences = []
@@ -56,6 +57,7 @@ def beam_decode(decoder, N, decoder_hiddens, encoder_outputs, sos_index, eos_ind
 
         score, n = queue.get()
         decoder_input = n.word_id
+        print("Getting from priority queue: ", decoder_input)
         decoder_hidden = n.h
 
         if n.word_id.item() == eos_index and n.prev_node != None:  # EOS check
@@ -78,6 +80,7 @@ def beam_decode(decoder, N, decoder_hiddens, encoder_outputs, sos_index, eos_ind
 
         for k in range(beam_width):
             decoded_word = indexes[k].view(-1)
+            print(decoded_word)
             log_p = log_prob[k].item()
 
             node = BeamSearchNode(decoder_hidden, n, decoded_word, n.log_prob + log_p, n.length + 1)
