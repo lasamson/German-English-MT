@@ -12,13 +12,15 @@ class BeamSearchNode(object):
         self.length = length
 
     def eval(self, alpha=0.7):
-        lp = ((5 + self.length) / 6) ** alpha
-        return self.log_prob / lp
+        alpha = 1.0
+        # lp = ((5 + self.length) / 6) ** alpha
+        # return self.log_prob / lp
+        return self.log_prob / float(self.length - 1 + 1e-6) + alpha
     
     def __lt__(self, other):
         return -self.eval() < -other.eval()
 
-def beam_decode(decoder, N, decoder_hiddens, encoder_outputs, sos_index, eos_index, beam_width, num_sentences, src_mask, device):
+def beam_decode(decoder, decoder_hiddens, encoder_outputs, sos_index, eos_index, beam_width, num_sentences, src_mask, device):
     """
     Perform Beam Search (translation) on a single src sequence 
     Arguments:
@@ -29,15 +31,15 @@ def beam_decode(decoder, N, decoder_hiddens, encoder_outputs, sos_index, eos_ind
         eos_index: end of sequence index
         beam_width: size of beam
         num_sentences: max number of translations for given src sequence
-        src_mask: mask on the src sequence
+        src_mask: mask on the src sequence [batch_size, seq_len]
         device: torch device
     
     Returns:
         A tensor with word indicies containing the translation output from beam search
     """
 
-    decoder_hidden = decoder_hiddens[:, 0, :].unsqueeze(1)
-    encoder_output = encoder_outputs[0, :, :].unsqueeze(0)
+    decoder_hidden = decoder_hiddens[:, 0, :]
+    encoder_output = encoder_outputs[0, :, :]
 
     # input token to the beam search process
     decoder_input = torch.LongTensor([sos_index]).to(device)
@@ -69,8 +71,10 @@ def beam_decode(decoder, N, decoder_hiddens, encoder_outputs, sos_index, eos_ind
         # decode for one step
         predictions, decoder_hidden, _ = decoder(decoder_input, decoder_hidden, src_mask, encoder_output)
 
+        # generate predictions 
         predictions = F.log_softmax(predictions, dim=1)
 
+        # choose the top K scoring predictions
         log_prob, indexes = torch.topk(predictions, beam_width)
         log_prob = log_prob.view(-1)
         indexes = indexes.view(-1)
