@@ -14,6 +14,9 @@ class BeamSearchNode(object):
     def eval(self, alpha=0.7):
         lp = ((5 + self.length) / 6) ** alpha
         return self.log_prob / lp
+    
+    def __lt__(self, other):
+        return -self.eval() < -other.eval()
 
 def beam_decode(decoder, N, decoder_hiddens, encoder_outputs, sos_index, eos_index, beam_width, num_sentences, src_mask, device):
     """
@@ -92,7 +95,6 @@ def beam_decode(decoder, N, decoder_hiddens, encoder_outputs, sos_index, eos_ind
     if len(full_sentences) == 0:
         full_sentences = [queue.get() for _ in range(num_sentences)] 
 
-    print(full_sentences)
     full_sentences_sorted = sorted(full_sentences, key=itemgetter(0))
     translation_path = full_sentences_sorted[0][1].prev_node
     utterence = []
