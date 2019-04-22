@@ -24,7 +24,8 @@ class MultiHeadAttention(nn.Module):
         self.d_k = d_model // num_heads
         self.num_heads = num_heads
         self.dropout = nn.Dropout(p=dropout)
-
+        
+        # projection matrices
         self.query_linear = nn.Linear(d_model, d_model, bias=False)
         self.key_linear = nn.Linear(d_model, d_model, bias=False)
         self.value_linear = nn.Linear(d_model, d_model, bias=False)
@@ -33,7 +34,7 @@ class MultiHeadAttention(nn.Module):
     def forward(self, query, key, value, mask=None):
         if mask is not None:
             # the same mask is applied to `num_heads` heads
-            mask = mask.unsqueeze(1) # [batch_size, seq_len]
+            mask = mask.unsqueeze(1) # [batch_size, 1, seq_len]
 
         # Pass key, queries, values through linear layer
         # [batch_size, seq_len, d_model]
@@ -116,6 +117,9 @@ class MultiHeadAttention(nn.Module):
 class LayerNorm(nn.Module):
     """
     Apply LayerNorm to input
+
+    Arguments:
+        d_model: size of the hidden representation of the transformer (eg. 512)
     """
     def __init__(self, d_model, eps=1e-6):
         super(LayerNorm, self).__init__()
@@ -135,9 +139,12 @@ class PositionwiseFeedForwardNet(nn.Module):
     
     The dimensionality of the input and output is d_model = 512 and the 
     inner-layer has dimensionality d_ff = 2048
-
+    
+    Arguments:
+        d_model: size of the hidden representation of the Transformer (eg. 512)
+        d_ff: hidden size representation of position wise feedforward net (eg. 2048)
     """
-    def __init__(self, d_model, d_ff, dropout=0.1):
+    def __init__(self, d_model, d_ff=2048, dropout=0.1):
         super(PositionwiseFeedForwardNet, self).__init__()
         self.linear_1 = nn.Linear(d_model, d_ff)
         self.linear_2 = nn.Linear(d_ff, d_model)
