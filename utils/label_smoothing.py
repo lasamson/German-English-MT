@@ -9,6 +9,11 @@ class LabelSmoothingLoss(nn.Module):
     Use LabelSmoothing to compute the loss
     KL-Divergence between the q: smoothed ground truth prob
     and p: probability computed the model
+
+    Why Label Smoothing? 
+        A network is over confident when it places all probability on a `single class`
+        in the training set. We want to prevent peaky distributions, which 
+        can lead to better generalizations by relaxing the confidence on the labels
     """
 
     def __init__(self, label_smoothing, tgt_vocab_size, pad_index):
