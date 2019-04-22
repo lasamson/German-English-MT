@@ -13,7 +13,11 @@ class EncoderLayer(nn.Module):
         layer_dropout: amount of dropout to apply before layernorm
         attention_dropout: amount of dropout to apply in the multi-head attention layer
         relu_dropout: amount of dropout to apply in positionwise feedforward net
+    
+    Returns: 
+        A Tensor output of shape [batch_size, seq_len, d_model]
     """
+
     def __init__(self, d_model, d_ff, num_heads, layer_dropout=0.0, attention_dropout=0.0, relu_dropout=0.0):
         super(EncoderLayer, self).__init__()
         self.layer_norm_mha = LayerNorm(d_model)
@@ -54,7 +58,11 @@ class DecoderLayer(nn.Module):
         layer_dropout: amount of dropout to apply before layernorm
         attention_dropout: amount of dropout to apply in the multi-head attention layer
         relu_dropout: amount of dropout to apply in positionwise feedforward net
+    
+    Returns;
+        A Tensor output of shape [batch_size, seq_len, d_model]
     """
+
     def __init__(self, d_model, d_ff, num_heads, layer_dropout=0.0, attention_dropout=0.0, relu_dropout=0.0):
         super(DecoderLayer, self).__init__()
         self.multi_head_attention_dec = MultiHeadAttention(d_model, num_heads, attention_dropout)
