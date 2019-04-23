@@ -2,9 +2,15 @@
 import numpy as np
 
 class ScheduledOptimizer():
-    """ A simple wrapper class for learning rate scheduling """
+    """ 
+    A simple wrapper class for learning rate scheduling .
+    Vary the learning rate over the course of traning.
+    Increase the learning rate linearly for `n_warmup_steps`
+    training steps and decreasing it proportionally to the inverse
+    square root of the step number
+    """
 
-    def __init__(self, optimizer, d_model, n_warmup_steps):
+    def __init__(self, optimizer, d_model, n_warmup_steps=4000):
         self._optimizer = optimizer
         self.n_warmup_steps = n_warmup_steps
         self.n_current_steps = 0

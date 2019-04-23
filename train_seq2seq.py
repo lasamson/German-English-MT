@@ -19,9 +19,10 @@ class Trainer(object):
     """
     Class to handle the training of Seq2Seq based models
     """
-    def __init__(self, model, optimizer, num_epochs, train_iter, dev_iter, params):
+    def __init__(self, model, optimizer, criterion, num_epochs, train_iter, dev_iter, params):
         self.model = model
         self.optimizer = optimizer
+        self.criterion = criterion
         self.train_iter = train_iter
         self.dev_iter = dev_iter
         self.params = params
@@ -34,9 +35,8 @@ class Trainer(object):
         Train `model` for one epoch
         """
         self.model.train()
-        criterion = nn.CrossEntropyLoss(ignore_index=self.params.pad_token)
-        loss_avg = RunningAverage()
-        pp = RunningAverage()
+        total_loss = 0
+        n_word_total = 0
         with tqdm(total=len(self.train_iter)) as t:
             for idx, batch in enumerate(self.train_iter):
                 src, src_lengths = batch.src
@@ -46,35 +46,42 @@ class Trainer(object):
                 if self.params.cuda:
                     src, trg = src.cuda(), trg.cuda()
 
+                # run the data through the model
+                self.optimizer.zero_grad()
                 output = self.model(src, trg, src_lengths, trg_lengths, src_mask, tf_ratio=self.params.teacher_forcing_ratio)
-                output = output[:, :-1, :].contiguous().view(-1, self.params.vocab_size)
+                output = output[:, :-1, :].contiguous().view(-1, self.params.tgt_vocab_size)
                 trg = trg[:, 1:].contiguous().view(-1)
 
                 assert output.size(0) == trg.size(0)
-
-                self.optimizer.zero_grad()
-                loss = criterion(output, trg)
+                
+                # compute the loss and the gradients
+                loss = self.criterion(output, trg)
                 loss.backward()
-
+                
+                # update the parameters
                 nn.utils.clip_grad_norm_(self.model.parameters(), self.params.grad_clip)
                 self.optimizer.step()
 
                 # update the average loss
-                loss_avg.update(loss.item())
-                pp.update(math.exp(loss_avg()))
-                t.set_postfix(loss='{:05.3f}'.format(loss_avg()), pp='{}'.format(pp()))
+                total_loss += loss.item()
+                non_pad_mask = trg.ne(self.params.pad_token)
+                n_word = non_pad_mask.sum().item()
+                n_word_total += n_word
+
+                t.set_postfix(loss='{:05.3f}'.format(loss/n_word))
                 t.update()
+
                 torch.cuda.empty_cache()
-        return loss_avg(), pp()
+        loss_per_word = total_loss/n_word_total
+        return loss_per_word
 
     def validate(self):
         """
         Evaluate the loss of the `model` on the dev set
         """
         self.model.eval()
-        criterion = nn.CrossEntropyLoss(ignore_index=self.params.pad_token)
-        loss_avg = RunningAverage()
-        pp = RunningAverage()
+        total_loss = 0
+        n_word_total = 0
         with tqdm(total=len(self.dev_iter)) as t:
             with torch.no_grad():
                 for idx, batch in enumerate(self.dev_iter):
@@ -85,18 +92,25 @@ class Trainer(object):
                     if self.params.cuda:
                         src, trg = src.cuda(), trg.cuda()
 
-                    output = self.model(src, trg, src_lengths, trg_lengths, src_mask, tf_ratio=0.0)
-                    output = output[:, :-1, :].contiguous().view(-1, self.params.vocab_size)
+                    # run the data through the model
+                    output = self.model(src, trg, src_lengths, trg_lengths, src_mask, tf_ratio=1.0)
+                    output = output[:, :-1, :].contiguous().view(-1, self.params.tgt_vocab_size)
                     trg = trg[:, 1:].contiguous().view(-1)
 
                     assert output.size(0) == trg.size(0)
 
-                    loss = criterion(output, trg)
-                    loss_avg.update(loss.item())
-                    pp.update(math.exp(loss_avg()))
-                    t.set_postfix(loss='{:05.3f}'.format(loss_avg()), pp='{}'.format(pp()))
+                    # compute the loss
+                    loss = self.criterion(output, trg)
+
+                    total_loss += loss.item()
+                    non_pad_mask = trg.ne(self.params.pad_token)
+                    n_word = non_pad_mask.sum().item()
+                    n_word_total += n_word
+
+                    t.set_postfix(loss='{:05.3f}'.format(loss/n_word))
                     t.update()
-        return loss_avg(), pp()
+        loss_per_word = total_loss/n_word_total
+        return  loss_per_word
 
     def train(self):
         logging.info("Starting training for {} epoch(s)".format(self.max_num_epochs - self.epoch))
@@ -105,13 +119,13 @@ class Trainer(object):
             logging.info("Epoch {}/{}".format(epoch+1, self.max_num_epochs))
 
             epoch_start_time = time.time()
-            train_loss_avg, train_pp_avg = self.train_epoch()
+            train_loss_avg = self.train_epoch()
             epoch_end_time = time.time()
             epoch_mins, epoch_secs = self.epoch_time(epoch_start_time, epoch_end_time)
-            logging.info(f'Epoch: {epoch+1:02} | Avg Train Loss: {train_loss_avg} | Avg Train Perplexity: {train_pp_avg} | Time: {epoch_mins}m {epoch_secs}s')
+            logging.info(f'Epoch: {epoch+1:02} | Avg Train Loss: {train_loss_avg} | Time: {epoch_mins}m {epoch_secs}s')
 
-            val_loss_avg, val_pp_avg = self.validate() 
-            logging.info(f'Avg Val Loss: {val_loss_avg} | Avg Val Perplexity: {val_pp_avg}')
+            val_loss_avg = self.validate() 
+            logging.info(f'Avg Val Loss: {val_loss_avg}')
 
             is_best = val_loss_avg < self.best_val_loss
 
@@ -182,7 +196,8 @@ def main(params):
     logging.info("[DE Vocab Size]: {}, [EN Vocab Size]: {}".format(de_size, en_size))
     logging.info("- done.")
 
-    params.vocab_size = en_size
+    params.src_vocab_size = de_size
+    params.tgt_vocab_size = en_size
     params.pad_token = EN.vocab.stoi["<pad>"]
 
     device = torch.device('cuda' if params.cuda else 'cpu')
@@ -205,7 +220,8 @@ def main(params):
 
     model = Seq2Seq(encoder, decoder, device).to(device)
     optimizer = optim.Adam(model.parameters(), lr=params.lr)
-    trainer = Trainer(model, optimizer, params.epochs, train_iter, dev_iter, params)
+    criterion = nn.CrossEntropyLoss(ignore_index=params.pad_token, reduction="sum")
+    trainer = Trainer(model, optimizer, criterion, params.epochs, train_iter, dev_iter, params)
 
     if params.restore_file:
         restore_path = os.path.join(params.model_dir+"/checkpoints/", params.restore_file)
