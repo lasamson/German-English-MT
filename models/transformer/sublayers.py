@@ -9,6 +9,15 @@ import math
 class ScaledDotProductAttention(nn.Module):
     """
     Implementation of Scaled Dot Product Attention
+    Calculate attention with the following equation:
+
+    Attention(Q, K, V) = ((QK^T) / sqrt(d_k)) * V
+
+    Arguments:
+        attn_dropout: Amount of dropout to apply to the attention scores
+    
+    Returns: 
+        A Tensor of shape [batch_size, num_heads, seq_len, d_model/num_heads]
     """
 
     def __init__(self, attn_dropout=0.1):
@@ -46,6 +55,9 @@ class MultiHeadAttention(nn.Module):
         d_model: size of the model (eg. 512)
         num_heads: number of attention heads
         dropout: Dropout probability (Should be non-zero only during training)
+    
+    Returns:
+        A Tensor of shape [batch_size, seq_len, d_model]
     """
 
     def __init__(self, d_model, num_heads, attn_dropout=0.1):
@@ -60,15 +72,17 @@ class MultiHeadAttention(nn.Module):
         self.attention = ScaledDotProductAttention(attn_dropout)
         
         # projection matrices
-        self.query_linear = nn.Linear(d_model, d_model, bias=False)
-        self.key_linear = nn.Linear(d_model, d_model, bias=False)
-        self.value_linear = nn.Linear(d_model, d_model, bias=False)
-        self.output_linear = nn.Linear(d_model, d_model, bias=False)
+        self.query_linear = nn.Linear(d_model, d_model)
+        self.key_linear = nn.Linear(d_model, d_model)
+        self.value_linear = nn.Linear(d_model, d_model)
+        self.output_linear = nn.Linear(d_model, d_model)
 
     def forward(self, query, key, value, mask=None):
         if mask is not None:
             # the same mask is applied to `num_heads` heads
-            mask = mask.unsqueeze(1) # [batch_size, 1, seq_len]
+            # so we add an extra dimension to the mask
+            # [batch_size, 1, 1, seq_len]
+            mask = mask.unsqueeze(1) 
 
         # Pass key, queries, values through linear layer
         # [batch_size, seq_len, d_model]
@@ -99,7 +113,7 @@ class MultiHeadAttention(nn.Module):
     def _merge_heads(self, x):
         """
         Merge the heads input `x` into the last dimension
-
+         
         Arguments:
             x: input Tensor with shape [batch_size, num_heads, seq_len, d_model/num_heads]
 
@@ -129,6 +143,9 @@ class LayerNorm(nn.Module):
 
     Arguments:
         d_model: size of the hidden representation of the transformer (eg. 512)
+    
+    Returns:
+        A Tensor of shape [batch_size, seq_len, d_model]
     """
     def __init__(self, d_model, eps=1e-6):
         super().__init__()
@@ -152,6 +169,9 @@ class PositionwiseFeedForwardNet(nn.Module):
     Arguments:
         d_model: size of the hidden representation of the Transformer (eg. 512)
         d_ff: hidden size representation of position wise feedforward net (eg. 2048)
+    
+    Returns:
+        A Tensor of shape [batch_size, seq_len, d_model]
     """
     def __init__(self, d_model, d_ff=2048, dropout=0.1):
         super().__init__()

@@ -77,11 +77,13 @@ class Translator(object):
                         src = src.cuda()
 
                     # run the src langauge through the Encoder
-                    # output => [l, n, num_directions*hidden_size], hidden => [num_layers*num_directions, n, hidden_size]
+                    # output => [l, n, num_directions*hidden_size], hidden => [num_layers, n, hidden_size] 
                     output, hidden = self.model.encoder(src, src_lengths)
                     hidden = hidden[:self.model.decoder.num_layers]
-                    translations = beam_decode(self.model.decoder, src.size(0), hidden, output, self.params.sos_index, self.params.eos_index, beam_width, num_sentences, src_mask, self.device)
-                    tokens = self.batch_reverse_tokenization(translations)
+
+                    # output: [batch_size, seq_len, hidden_size], hidden: [num_layers, batch_size, hidden_size]
+                    translation = beam_decode(self.model.decoder, hidden, output, self.params.sos_index, self.params.eos_index, beam_width, num_sentences, src_mask, self.device)
+                    tokens = self.batch_reverse_tokenization(translation)
                     decoded_sentences.extend(tokens)
                     t.update()
         return decoded_sentences
