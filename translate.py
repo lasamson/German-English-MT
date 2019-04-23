@@ -5,15 +5,17 @@ import torch
 from utils.data_loader import load_dataset
 from models.seq2seq import Encoder, Decoder, AttentionDecoder, Seq2Seq
 from models.attention import DotProductAttention, BahdanauAttention
-from utils.utils import HyperParams, load_checkpoint 
-from utils.beam_search import beam_decode
+from utils.utils import HyperParams, load_checkpoint
+from utils.beam_search import beam_decode, beam_decode_iterative
 from models.seq2seq import Encoder, Decoder, Seq2Seq
 from tqdm import tqdm
+
 
 class Translator(object):
     """
     Translator class that handles Greedy Decoding and Beam Search inorder to obtain translations from the model
     """
+
     def __init__(self, model, dev_iter, params, device):
         self.model = model
         self.dev_iter = dev_iter
@@ -70,6 +72,8 @@ class Translator(object):
         with tqdm(total=len(self.dev_iter)) as t:
             with torch.no_grad():
                 for index, batch in enumerate(self.dev_iter):
+                    # if (index + 1) % 20 == 0:
+                        # break
                     src, src_lengths = batch.src
                     src_mask = (src != self.params.pad_token).unsqueeze(-2)
 
@@ -80,7 +84,8 @@ class Translator(object):
                     # output => [l, n, num_directions*hidden_size], hidden => [num_layers*num_directions, n, hidden_size]
                     output, hidden = self.model.encoder(src, src_lengths)
                     hidden = hidden[:self.model.decoder.num_layers]
-                    translations = beam_decode(self.model.decoder, src.size(0), hidden, output, self.params.sos_index, self.params.eos_index, beam_width, num_sentences, src_mask, self.device)
+                    translations = beam_decode_iterative(self.model.decoder, hidden, output, self.params.sos_index, self.params.eos_index, beam_width, num_sentences, src_mask, self.device)
+                    # translations = beam_decode(self.model.decoder, hidden, output, self.params.sos_index, self.params.eos_index, beam_width, num_sentences, src_mask, self.device)
                     tokens = self.batch_reverse_tokenization(translations)
                     decoded_sentences.extend(tokens)
                     t.update()
@@ -119,6 +124,7 @@ class Translator(object):
                 sentence = " ".join(sentence)
                 f.write(sentence + '\n')
 
+
 def main(params, greedy, beam_size):
     """
     The main function for decoding a trained MT model
@@ -138,8 +144,8 @@ def main(params, greedy, beam_size):
 
     device = torch.device("cuda" if params.cuda else "cpu")
     encoder = Encoder(src_vocab_size=de_size, embed_size=params.embed_size,
-                    hidden_size=params.hidden_size, input_dropout_p=params.input_dropout_p_enc,
-                    num_layers=params.n_layers_enc, dropout_p=params.dropout_p)
+                      hidden_size=params.hidden_size, input_dropout_p=params.input_dropout_p_enc,
+                      num_layers=params.n_layers_enc, dropout_p=params.dropout_p)
 
     if "attention" in vars(params):
         print("Decoding from Seq2Seq w/ ({0}) Attention...".format(params.attention))
