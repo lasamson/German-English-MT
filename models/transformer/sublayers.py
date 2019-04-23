@@ -5,47 +5,7 @@ from torch import nn
 import torch.nn.functional as F
 import numpy as np
 import math
-
-class ScaledDotProductAttention(nn.Module):
-    """
-    Implementation of Scaled Dot Product Attention
-    Calculate attention with the following equation:
-
-    Attention(Q, K, V) = ((QK^T) / sqrt(d_k)) * V
-
-    Arguments:
-        attn_dropout: Amount of dropout to apply to the attention scores
-    
-    Returns: 
-        A Tensor of shape [batch_size, num_heads, seq_len, d_model/num_heads]
-    """
-
-    def __init__(self, attn_dropout=0.1):
-        super().__init__()
-        self.attn_dropout = nn.Dropout(attn_dropout)
-    
-    def forward(self, query, key, value, mask):
-        d_k = query.size(-1) # get the size of the query
-
-        # compute unnormalized scores
-        # query: [batch_size, num_heads, seq_len, d_k]
-        # keys: [batch_size, num_heads, seq_len, d_k]
-        # [batch_size, num_heads, seq_len, d_k] * [batch_size, num_heads, d_k, seq_len] => [batch_size, num_heads, seq_len, seq_len]
-        scores = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(d_k) 
-
-        # apply mask to scores if given
-        if mask is not None:
-            scores = scores.masked_fill(mask == 0, -np.inf)
-
-        # compute normalized attention scores
-        attention_scores = F.softmax(scores, dim=-1) # [batch_size, num_heads, seq_len, seq_len]
-
-        # apply dropout to the attention scores
-        attention_scores = self.attn_dropout(attention_scores) 
-
-        # [batch_size, num_heads, seq_len, seq_len]  * [batch_size, num_heads, seq_len, d_model/num_heads] => [batch_size, num_heads, seq_len, d_model/num_heads]
-        return torch.matmul(attention_scores, value), attention_scores
-       
+from ..attention import ScaledDotProductAttention
 
 class MultiHeadAttention(nn.Module):
     """
@@ -176,12 +136,10 @@ class PositionwiseFeedForwardNet(nn.Module):
     def __init__(self, d_model, d_ff=2048, dropout=0.1):
         super().__init__()
         self.linear_1 = nn.Linear(d_model, d_ff)
-        self.linear_2 = nn.Linear(d_ff, d_model)
         self.dropout = nn.Dropout(dropout)
+        self.linear_2 = nn.Linear(d_ff, d_model)
 
     def forward(self, x):
-        out = self.linear_1(x)
-        out = F.relu(out)
-        out = self.dropout(out)
+        out = self.dropout(F.relu(self.linear_1(x)))
         out = self.linear_2(out)
         return out
