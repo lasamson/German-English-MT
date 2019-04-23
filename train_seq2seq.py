@@ -49,7 +49,7 @@ class Trainer(object):
                 # run the data through the model
                 self.optimizer.zero_grad()
                 output = self.model(src, trg, src_lengths, trg_lengths, src_mask, tf_ratio=self.params.teacher_forcing_ratio)
-                output = output[:, :-1, :].contiguous().view(-1, self.params.vocab_size)
+                output = output[:, :-1, :].contiguous().view(-1, self.params.tgt_vocab_size)
                 trg = trg[:, 1:].contiguous().view(-1)
 
                 assert output.size(0) == trg.size(0)
@@ -94,7 +94,7 @@ class Trainer(object):
 
                     # run the data through the model
                     output = self.model(src, trg, src_lengths, trg_lengths, src_mask, tf_ratio=1.0)
-                    output = output[:, :-1, :].contiguous().view(-1, self.params.vocab_size)
+                    output = output[:, :-1, :].contiguous().view(-1, self.params.tgt_vocab_size)
                     trg = trg[:, 1:].contiguous().view(-1)
 
                     assert output.size(0) == trg.size(0)
@@ -196,7 +196,8 @@ def main(params):
     logging.info("[DE Vocab Size]: {}, [EN Vocab Size]: {}".format(de_size, en_size))
     logging.info("- done.")
 
-    params.vocab_size = en_size
+    params.src_vocab_size = de_size
+    params.tgt_vocab_size = en_size
     params.pad_token = EN.vocab.stoi["<pad>"]
 
     device = torch.device('cuda' if params.cuda else 'cpu')
@@ -219,7 +220,7 @@ def main(params):
 
     model = Seq2Seq(encoder, decoder, device).to(device)
     optimizer = optim.Adam(model.parameters(), lr=params.lr)
-    criterion = nn.CrossEntropyLoss(ignore_index=self.params.pad_token, reduction="sum")
+    criterion = nn.CrossEntropyLoss(ignore_index=params.pad_token, reduction="sum")
     trainer = Trainer(model, optimizer, criterion, params.epochs, train_iter, dev_iter, params)
 
     if params.restore_file:
