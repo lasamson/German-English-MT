@@ -55,7 +55,7 @@ class Trainer(object):
                 assert output.size(0) == trg.size(0)
                 
                 # compute the loss and the gradients
-                loss = criterion(output, trg)
+                loss = self.criterion(output, trg)
                 loss.backward()
                 
                 # update the parameters
@@ -100,7 +100,7 @@ class Trainer(object):
                     assert output.size(0) == trg.size(0)
 
                     # compute the loss
-                    loss = criterion(output, trg)
+                    loss = self.criterion(output, trg)
 
                     total_loss += loss.item()
                     non_pad_mask = trg.ne(self.params.pad_token)
