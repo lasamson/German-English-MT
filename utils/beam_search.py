@@ -4,6 +4,16 @@ import torch.nn.functional as F
 import torch
 
 class BeamSearchNode(object):
+    """ 
+    Represents one node in the Beam Search Process 
+
+    Arguments:
+        decoder_hidden: hidden state of the decoder at the current timestep
+        prev_node: parent node of the current Beam Search Node
+        word_id: index of the word
+        log_prob: log probability of partial hypothesis
+        length: length of partial hypothessis
+    """
     def __init__(self, decoder_hidden, prev_node, word_id, log_prob, length):
         self.h = decoder_hidden
         self.prev_node = prev_node
@@ -11,16 +21,16 @@ class BeamSearchNode(object):
         self.log_prob = log_prob
         self.length = length
 
-    def eval(self, alpha=0.7):
-        alpha = 1.0
-        # lp = ((5 + self.length) / 6) ** alpha
-        # return self.log_prob / lp
-        return self.log_prob / float(self.length - 1 + 1e-6) + alpha
-    
+    def eval(self, alpha=0.6):
+        return self.log_prob / float(self.length_penalty(alpha))
+
+    def length_penalty(self, alpha):
+        return ((5 + self.length) / 6) ** alpha
+
     def __lt__(self, other):
         return -self.eval() < -other.eval()
 
-def beam_decode(decoder, decoder_hiddens, encoder_outputs, sos_index, eos_index, beam_width, num_sentences, src_mask, device):
+def beam_decode(decoder, decoder_hidden, encoder_outputs, sos_index, eos_index, beam_width, num_sentences, src_mask, device):
     """
     Perform Beam Search (translation) on a single src sequence 
     Arguments:
@@ -37,9 +47,6 @@ def beam_decode(decoder, decoder_hiddens, encoder_outputs, sos_index, eos_index,
     Returns:
         A tensor with word indicies containing the translation output from beam search
     """
-
-    decoder_hidden = decoder_hiddens[:, 0, :]
-    encoder_output = encoder_outputs[0, :, :]
 
     # input token to the beam search process
     decoder_input = torch.LongTensor([sos_index]).to(device)
@@ -69,7 +76,7 @@ def beam_decode(decoder, decoder_hiddens, encoder_outputs, sos_index, eos_index,
                 continue
 
         # decode for one step
-        predictions, decoder_hidden, _ = decoder(decoder_input, decoder_hidden, src_mask, encoder_output)
+        predictions, decoder_hidden, _ = decoder(decoder_input, decoder_hidden, src_mask, encoder_outputs)
 
         # generate predictions 
         predictions = F.log_softmax(predictions, dim=1)
