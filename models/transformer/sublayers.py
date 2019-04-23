@@ -3,7 +3,40 @@
 import torch
 from torch import nn
 import torch.nn.functional as F
+import numpy as np
 import math
+
+class ScaledDotProductAttention(nn.Module):
+    """
+    Implementation of Scaled Dot Product Attention
+    """
+
+    def __init__(self, attn_dropout=0.1):
+        super().__init__()
+        self.attn_dropout = nn.Dropout(attn_dropout)
+    
+    def forward(self, query, key, value, mask):
+        d_k = query.size(-1) # get the size of the query
+
+        # compute unnormalized scores
+        # query: [batch_size, num_heads, seq_len, d_k]
+        # keys: [batch_size, num_heads, seq_len, d_k]
+        # [batch_size, num_heads, seq_len, d_k] * [batch_size, num_heads, d_k, seq_len] => [batch_size, num_heads, seq_len, seq_len]
+        scores = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(d_k) 
+
+        # apply mask to scores if given
+        if mask is not None:
+            scores = scores.masked_fill(mask == 0, -np.inf)
+
+        # compute normalized attention scores
+        attention_scores = F.softmax(scores, dim=-1) # [batch_size, num_heads, seq_len, seq_len]
+
+        # apply dropout to the attention scores
+        attention_scores = self.attn_dropout(attention_scores) 
+
+        # [batch_size, num_heads, seq_len, seq_len]  * [batch_size, num_heads, seq_len, d_model/num_heads] => [batch_size, num_heads, seq_len, d_model/num_heads]
+        return torch.matmul(attention_scores, value), attention_scores
+       
 
 class MultiHeadAttention(nn.Module):
     """
@@ -15,15 +48,16 @@ class MultiHeadAttention(nn.Module):
         dropout: Dropout probability (Should be non-zero only during training)
     """
 
-    def __init__(self, d_model, num_heads, dropout=0.1):
-        super(MultiHeadAttention, self).__init__()
+    def __init__(self, d_model, num_heads, attn_dropout=0.1):
+        super().__init__()
 
         if d_model % num_heads != 0:
             raise ValueError("d_model must be divisible by the number of attention heads: {}".format(num_heads))
 
-        self.d_k = d_model // num_heads
         self.num_heads = num_heads
-        self.dropout = nn.Dropout(p=dropout)
+
+        # scaled dot product attention
+        self.attention = ScaledDotProductAttention(attn_dropout)
         
         # projection matrices
         self.query_linear = nn.Linear(d_model, d_model, bias=False)
@@ -50,7 +84,7 @@ class MultiHeadAttention(nn.Module):
 
         # apply attention to each head
         # [batch_size, num_heads, seq_len, d_model/num_heads]
-        contexts = self.attention(queries, keys, values, mask=mask, dropout=self.dropout)
+        contexts, _ = self.attention(queries, keys, values, mask=mask)
 
         # now we need to merge all the heads
         # [batch_size, num_heads, seq_len, d_model/num_heads] => [batch_size, seq_len, d_model]
@@ -89,31 +123,6 @@ class MultiHeadAttention(nn.Module):
         shape = x.shape
         return x.view(shape[0], shape[1], self.num_heads, shape[2]//self.num_heads).permute(0, 2, 1, 3)
     
-    def attention(self, query, key, value, mask=None, dropout=None):
-        """ 
-        Apply Scaled Dot Product Attention 
-        """        
-        d_k = query.size(-1) # get the size of the query
-
-        # compute unnormalized scores
-        # query: [batch_size, seq_len, d_k]
-        # keys: [batch_size, seq_len, d_k]
-        # [batch_size, seq_len, d_k] * [batch_size, d_k, seq_len] => [batch_size, seq_len, seq_len]
-        scores = torch.bmm(query, key.transpose(-2, -1)) / math.sqrt(d_k) 
-
-        # apply mask to scores if given
-        if mask is not None:
-            scores = scores.masked_fill(mask == 0, -1e10)
-
-        # compute normalized attention scores
-        attention_scores = F.softmax(scores, dim=-1) # [batch_size, seq_len, seq_len]
-
-        if dropout is not None:
-            attention_scores = dropout(attention_scores) 
-
-        # [batch_size, seq_len, seq_len]  * [batch_size, seq_len, d_v] => [batch_size, seq_len, d_v]
-        return torch.bmm(attention_scores, value), attention_scores
-
 class LayerNorm(nn.Module):
     """
     Apply LayerNorm to input
@@ -122,7 +131,7 @@ class LayerNorm(nn.Module):
         d_model: size of the hidden representation of the transformer (eg. 512)
     """
     def __init__(self, d_model, eps=1e-6):
-        super(LayerNorm, self).__init__()
+        super().__init__()
         self.gamma = nn.Parameter(torch.ones(d_model))
         self.beta = nn.Parameter(torch.ones(d_model))
         self.eps = eps
@@ -145,7 +154,7 @@ class PositionwiseFeedForwardNet(nn.Module):
         d_ff: hidden size representation of position wise feedforward net (eg. 2048)
     """
     def __init__(self, d_model, d_ff=2048, dropout=0.1):
-        super(PositionwiseFeedForwardNet, self).__init__()
+        super().__init__()
         self.linear_1 = nn.Linear(d_model, d_ff)
         self.linear_2 = nn.Linear(d_ff, d_model)
         self.dropout = nn.Dropout(dropout)
