@@ -2,14 +2,23 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import copy
 from .embeddings import Embedder, PositionalEncoder
 from .layers import EncoderLayer, DecoderLayer
 from .sublayers import LayerNorm
-from .transformer_utils import get_clones
+
+def get_clones(module, N):
+    """ 
+    Produce N identical layers 
+    Arguments:
+        module: the module (layer) to repeat N times 
+        N: number of identical layers
+    """
+    return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
 
 class Encoder(nn.Module):
     """
-    A Transformer Encoder Module
+    A Transformer Encoder Module with `num_layers` layers
     Inputs to the Encoder should in the shape [batch_size, seq_len, hidden_size]
     Outputs of the Encoder will have the shape [batch_size, seq_len, hidden_size]
 
@@ -43,26 +52,25 @@ class Encoder(nn.Module):
         self.encoder_stack = get_clones(EncoderLayer(d_model, d_ff, num_heads, layer_dropout, attention_dropout, relu_dropout), num_layers)
 
         # Layer Norm on the output of the Encoder
-        self.layer_norm = LayerNorm(d_model)
+        self.output_layer_norm = LayerNorm(d_model)
 
     def forward(self, src, src_mask):
 
-        # sum the Embeddings and Positional Encodings
-        x = self.embeddings(src)
-        x = self.positional_encodings(x)
+        # sum the Token Embeddings and Positional Encodings
+        x = self.positional_encodings(self.embeddings(src))
 
         # pass the embeddings through the Encoder stack
         for i in range(self.num_layers):
             x = self.encoder_stack[i](x, src_mask)
 
         # layer norm on the output
-        x = self.layer_norm(x)
+        x = self.output_layer_norm(x)
 
         return x 
 
 class Decoder(nn.Module):
     """
-    A Transformer Decoder Module
+    A Transformer Decoder Module with `num_layers` layers
     Inputs should be in a shape [batch_size, seq_len, hidden_size]
     Outputs will have the shape [batch_size, seq_len, hidden_size]
     Arguments:
@@ -95,33 +103,32 @@ class Decoder(nn.Module):
         self.decoder_stack = get_clones(DecoderLayer(d_model, d_ff, num_heads, layer_dropout, attention_dropout, relu_dropout), num_layers)
 
         # Layer Norm on the output of the Decoder
-        self.layer_norm = LayerNorm(d_model)
+        self.output_layer_norm = LayerNorm(d_model)
     
     def forward(self, trg, encoder_outputs, src_mask, trg_mask):
         
         # sum the Embeddings and Positional Encodings
-        x = self.embeddings(trg)
-        x = self.positional_encodings(x)
+        x = self.positional_encodings(self.embeddings(trg))
 
         # pass the input through the Decoder Stack
         for i in range(self.num_layers):
             x = self.decoder_stack[i](x, encoder_outputs, src_mask, trg_mask)
         
         # layer norm on the output
-        x = self.layer_norm(x)
+        x = self.output_layer_norm(x)
 
         return x
 
 
 class Transformer(nn.Module):
     """
-    A standard Encoder-Decoder Architecture for the Transformer
-    Returns log probabilities [batch_size, seq_len, tgt_vocab_size]
+    A standard Encoder-Decoder Architecture for the Transformer Model
+    Returns log probabilities of shape [batch_size, seq_len, tgt_vocab_size]
 
     Arguments:
         encoder: Encoder stack of the Transformer
         decoder: Decoder stack of the Transformer
-        generator: linear output softmax layer
+        generator: linear output softmax layer [d_model, tgt_vocab_size]
     
     Returns:
         A Tensor of shape [batch_size, seq_len, tgt_vocab_size]
@@ -166,7 +173,7 @@ class Transformer(nn.Module):
     
     def decode(self, tgt, encoder_outputs, src_mask, tgt_mask):
         """
-        Decode the target sequence
+        Decode the target sequence given the outputs from the encoder
         
         Arguments:
             tgt: Target sequence tensor [batch_size, seq_len]
@@ -183,15 +190,16 @@ def make_transformer(params):
     """ Return a Transformer EncoderDecoder Model """
 
     assert params.embedding_size == params.d_model, "To facilitate the residual connections, \
-        the dimensions of all module outputs should be the same"
+        the dimensions of all module outputs should be the same. Please make the embedding \
+        size and the d_model size the same"
 
     encoder = Encoder(params.embedding_size, params.src_vocab_size, params.d_model, params.enc_num_layers, 
-                    params.num_heads, params.max_length, d_ff=2048, input_dropout=params.input_dropout,
+                    params.num_heads, params.max_length, d_ff=params.d_ff, input_dropout=params.input_dropout,
                     layer_dropout=params.layer_dropout, attention_dropout=params.attention_dropout, 
                     relu_dropout=params.relu_dropout)
 
     decoder = Decoder(params.embedding_size, params.tgt_vocab_size, params.d_model, params.dec_num_layers, 
-                    params.num_heads, params.max_length, d_ff=2048, input_dropout=params.input_dropout,
+                    params.num_heads, params.max_length, d_ff=params.d_ff, input_dropout=params.input_dropout,
                     layer_dropout=params.layer_dropout, attention_dropout=params.attention_dropout, 
                     relu_dropout=params.relu_dropout)
 
