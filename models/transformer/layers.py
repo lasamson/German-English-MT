@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from sublayers import LayerNorm, MultiHeadAttention, PositionwiseFeedForwardNet
+from .sublayers import LayerNorm, MultiHeadAttention, PositionwiseFeedForwardNet
 
 class EncoderLayer(nn.Module):
     """
@@ -19,12 +19,12 @@ class EncoderLayer(nn.Module):
     """
 
     def __init__(self, d_model, d_ff, num_heads, layer_dropout=0.0, attention_dropout=0.0, relu_dropout=0.0):
-        super(EncoderLayer, self).__init__()
-        self.layer_norm_mha = LayerNorm(d_model)
-        self.layer_norm_ffn = LayerNorm(d_model)
+        super().__init__()
         self.multi_head_attention = MultiHeadAttention(d_model, num_heads, attention_dropout)
         self.positionwise_feedforward_net = PositionwiseFeedForwardNet(d_model, d_ff, relu_dropout)
         self.dropout = nn.Dropout(layer_dropout)
+        self.layer_norm_mha = LayerNorm(d_model)
+        self.layer_norm_ffn = LayerNorm(d_model)
     
     def forward(self, x, src_mask):
         # Layer Normalization before Multi-head attention
@@ -64,14 +64,14 @@ class DecoderLayer(nn.Module):
     """
 
     def __init__(self, d_model, d_ff, num_heads, layer_dropout=0.0, attention_dropout=0.0, relu_dropout=0.0):
-        super(DecoderLayer, self).__init__()
+        super().__init__()
         self.multi_head_attention_dec = MultiHeadAttention(d_model, num_heads, attention_dropout)
         self.multi_head_attention_enc_dec = MultiHeadAttention(d_model, num_heads, attention_dropout)
         self.positionwise_feedforward_net = PositionwiseFeedForwardNet(d_model, d_ff, relu_dropout)
         self.dropout = nn.Dropout(layer_dropout)
         self.layer_norm_mha_dec = LayerNorm(d_model)
         self.layer_norm_mha_enc_dec = LayerNorm(d_model)
-        self.layer_norm_fnn = LayerNorm(d_model)
+        self.layer_norm_ffn = LayerNorm(d_model)
 
     def forward(self, x, encoder_outputs, src_mask, trg_mask):
 
@@ -79,7 +79,9 @@ class DecoderLayer(nn.Module):
         x_norm = self.layer_norm_mha_dec(x)
 
         # Masked Multi-head attention
-        y = self.multi_head_attention_dec(x_norm, x_norm, x_norm, trg_mask)
+        # query, key, value => [batch_size, tgt_seq_len, d_model]
+        # [batch_size, tgt_seq_len, d_model]
+        y = self.multi_head_attention_dec(query=x_norm, key=x_norm, value=x_norm, mask=trg_mask)
 
         # Dropout and residual after masked multi-head self-attention
         x = self.dropout(x + y)
@@ -88,13 +90,19 @@ class DecoderLayer(nn.Module):
         x_norm = self.layer_norm_mha_enc_dec(x)
 
         # Multi-head encoder-decoder attention
-        y = self.multi_head_attention_enc_dec(x_norm, encoder_outputs, encoder_outputs, src_mask)
+        # query => [batch_size, tgt_seq_len]
+        # key, value => [batch_size, src_seq_len, d_model]
+        # [batch_size, tgt_seq_len, d_model]
+        y = self.multi_head_attention_enc_dec(query=x_norm, key=encoder_outputs, value=encoder_outputs, mask=src_mask)
 
         # Dropout and residual after encoder-decoder attention
         x = self.dropout(x + y)
 
         # Layer Normalization before passing to Positionwise Feed Forward Net
         x_norm = self.layer_norm_ffn(x)
+
+        # pass input through position wise feedforward net
+        y = self.positionwise_feedforward_net(x_norm)
 
         # Dropout and residual after pointwise feedforward network
         y = self.dropout(x + y)
