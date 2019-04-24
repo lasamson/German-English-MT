@@ -144,7 +144,10 @@ def main(params, greedy, beam_size):
     params.eos_index = EN.vocab.stoi["</s>"]
     params.sos_index = EN.vocab.stoi["<s>"]
     params.itos = EN.vocab.itos
-       
+
+    device = torch.device('cuda' if params.cuda else 'cpu')
+    params.device = devicek
+
     # make the Seq2Seq model
     model = make_seq2seq_model(params)
 
