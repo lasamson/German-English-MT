@@ -44,9 +44,9 @@ class EncoderLayer(nn.Module):
         y = self.positionwise_feedforward_net(x_norm)
 
         # Dropout and residual
-        y = x + self.dropout_ffn(y)
+        x = x + self.dropout_ffn(y)
 
-        return y
+        return x 
 
 class DecoderLayer(nn.Module):
     """
@@ -68,10 +68,13 @@ class DecoderLayer(nn.Module):
         super().__init__()
         self.multi_head_attention_dec = MultiHeadAttention(d_model, num_heads, attention_dropout)
         self.multi_head_attention_enc_dec = MultiHeadAttention(d_model, num_heads, attention_dropout)
+
         self.positionwise_feedforward_net = PositionwiseFeedForwardNet(d_model, d_ff, relu_dropout)
+
         self.dropout_mmha = nn.Dropout(layer_dropout)
         self.dropout_mha = nn.Dropout(layer_dropout)
         self.dropout_ffn = nn.Dropout(layer_dropout)
+
         self.layer_norm_mha_dec = LayerNorm(d_model)
         self.layer_norm_mha_enc_dec = LayerNorm(d_model)
         self.layer_norm_ffn = LayerNorm(d_model)
@@ -108,6 +111,6 @@ class DecoderLayer(nn.Module):
         y = self.positionwise_feedforward_net(x_norm)
 
         # Dropout and residual after pointwise feedforward network
-        y = x + self.dropout_ffn(y)
+        x = x + self.dropout_ffn(y)
 
-        return y
+        return x

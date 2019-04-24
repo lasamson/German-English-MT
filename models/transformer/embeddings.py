@@ -52,7 +52,7 @@ class PositionalEncoder(nn.Module):
         pe[:, 1::2] = torch.cos(position * div_term)
         pe = pe.unsqueeze(0)
         self.register_buffer('pe', pe) 
- 
+
     def forward(self, x):
 
         #obtain the positional encodings (these encodings are fixed and not learnt during training)

@@ -1,3 +1,4 @@
+""" Implementation of various type of attention mechanisms """
 import random
 import torch
 from torch import nn
@@ -35,7 +36,7 @@ class ScaledDotProductAttention(nn.Module):
 
         # apply mask to scores if given
         if mask is not None:
-            scores = scores.masked_fill(mask == 0, -np.inf)
+            scores = scores.masked_fill(mask == 0, -1e9)
 
         # compute normalized attention scores
         attention_scores = F.softmax(scores, dim=-1) # [batch_size, num_heads, seq_len, seq_len]
@@ -83,8 +84,8 @@ class BahdanauAttention(nn.Module):
 
     def __init__(self, hidden_size, key_size=None, query_size=None):
         super().__init__()
-        # assumption is that the Encoder's outputs at each timestep are summed, instead of concatenated
-        key_size = hidden_size if key_size is None else key_size
+        # We assume a bi-directional encoder so key_size is 2*hidden_size
+        key_size = 2 * hidden_size if key_size is None else key_size
         query_size = hidden_size if query_size is None else query_size
 
         self.key_layer = nn.Linear(key_size, hidden_size, bias=False)

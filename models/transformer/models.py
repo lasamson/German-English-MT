@@ -2,19 +2,10 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import copy
+from utils.utils import get_clones
 from .embeddings import Embedder, PositionalEncoder
 from .layers import EncoderLayer, DecoderLayer
 from .sublayers import LayerNorm
-
-def get_clones(module, N):
-    """ 
-    Produce N identical layers 
-    Arguments:
-        module: the module (layer) to repeat N times 
-        N: number of identical layers
-    """
-    return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
 
 class Encoder(nn.Module):
     """
@@ -139,7 +130,7 @@ class Transformer(nn.Module):
         self.decoder = decoder
         self.generator = generator
     
-    def forward(self, src, tgt, src_mask, tgt_mask):
+    def forward(self, src, trg, src_mask, trg_mask):
         """ 
         Take in and process masked src and target sequences 
 
@@ -154,7 +145,7 @@ class Transformer(nn.Module):
         """
 
         encoder_output = self.encode(src, src_mask) # [batch_size, src_seq_len, d_model]
-        decoder_output = self.decode(tgt, encoder_output, src_mask, tgt_mask) # [batch_size, tgt_sequence, d_model]
+        decoder_output = self.decode(trg, encoder_output, src_mask, trg_mask) # [batch_size, tgt_sequence, d_model]
         logits = self.generator(decoder_output) # [batch_size, tgt_sequence, tgt_vocab_size]
         return F.log_softmax(logits, dim=-1)
     
@@ -188,21 +179,23 @@ class Transformer(nn.Module):
 
 def make_transformer(params):
     """ Return a Transformer EncoderDecoder Model """
-
     assert params.embedding_size == params.d_model, "To facilitate the residual connections, \
         the dimensions of all module outputs should be the same. Please make the embedding \
         size and the d_model size the same"
-
+    
+    # create the Transformer Encoder
     encoder = Encoder(params.embedding_size, params.src_vocab_size, params.d_model, params.enc_num_layers, 
                     params.num_heads, params.max_length, d_ff=params.d_ff, input_dropout=params.input_dropout,
                     layer_dropout=params.layer_dropout, attention_dropout=params.attention_dropout, 
                     relu_dropout=params.relu_dropout)
 
+    # create the Transformer Decoder
     decoder = Decoder(params.embedding_size, params.tgt_vocab_size, params.d_model, params.dec_num_layers, 
                     params.num_heads, params.max_length, d_ff=params.d_ff, input_dropout=params.input_dropout,
                     layer_dropout=params.layer_dropout, attention_dropout=params.attention_dropout, 
                     relu_dropout=params.relu_dropout)
 
+    # create the generator (linear softmax layer)
     generator = nn.Linear(params.d_model, params.tgt_vocab_size)
 
     if params.tgt_emb_prj_weight_sharing:
