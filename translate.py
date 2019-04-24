@@ -10,6 +10,7 @@ from models.seq2seq import make_seq2seq_model
 from utils.beam_search import beam_decode, beam_decode_iterative
 from tqdm import tqdm
 import logging
+from trainer import Trainer
 
 class Translator(object):
     """
