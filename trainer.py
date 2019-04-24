@@ -4,7 +4,7 @@ from tqdm import tqdm
 from torch.nn import functional as F
 from torch.autograd import Variable
 from utils.utils import HyperParams, set_logger, RunningAverage
-from models.transformers.optim import ScheduledOptimizer
+from models.transformer.optim import ScheduledOptimizer
 from torch.nn.utils import clip_grad_norm
 from utils.utils import make_tgt_mask
 import time, math, os, shutil
