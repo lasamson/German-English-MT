@@ -3,14 +3,11 @@ from torch.autograd import Variable
 from utils.beam_search import beam_decode, beam_decode_iterative
 from tqdm import tqdm
 import logging
-from translator import Translator
-
 
 class Translator(object):
     """
     Translator class that handles Greedy Decoding and Beam Search inorder to obtain translations from the model
     """
-
     def __init__(self, model, dev_iter, params, device):
         self.model = model
         self.dev_iter = dev_iter
