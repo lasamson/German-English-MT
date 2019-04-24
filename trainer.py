@@ -167,7 +167,8 @@ class Trainer(object):
         if is_best:
             shutil.copyfile(filepath, os.path.join(checkpoint, "best.pth.tar"))
 
-    def load_checkpoint(self, checkpoint):
+    @classmethod
+    def load_checkpoint(cls, model, checkpoint, optimizer=None):
         """
         Loads model parameters (state_dict) from file_path. If optimizer is provided
         loads state_dict of optimizer assuming it is present in checkpoint
@@ -179,10 +180,10 @@ class Trainer(object):
         if not os.path.exists(checkpoint):
             raise ("File doesn't exist {}".format(checkpoint))
         checkpoint = torch.load(checkpoint)
-        self.model.load_state_dict(checkpoint["state_dict"])
-        if self.optimizer:
-            if isinstance(self.optimizer, ScheduledOptimizer):
-                self.optimizer._optimizer.load_state_dict(checkpoint["optim_dict"])
+        model.load_state_dict(checkpoint["state_dict"])
+        if optimizer:
+            if isinstance(optimizer, ScheduledOptimizer):
+                optimizer._optimizer.load_state_dict(checkpoint["optim_dict"])
             else:
-                self.optimizer.load_state_dict(checkpoint["optim_dict"])
-        return checkpoint
+                optimizer.load_state_dict(checkpoint["optim_dict"])
+        return model

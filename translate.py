@@ -9,6 +9,7 @@ from utils.utils import HyperParams, load_checkpoint
 from models.seq2seq import make_seq2seq_model
 from utils.beam_search import beam_decode, beam_decode_iterative
 from tqdm import tqdm
+import logging
 
 class Translator(object):
     """
@@ -146,20 +147,15 @@ def main(params, greedy, beam_size):
     params.itos = EN.vocab.itos
 
     device = torch.device('cuda' if params.cuda else 'cpu')
-    params.device = devicek
+    params.device = device
 
     # make the Seq2Seq model
     model = make_seq2seq_model(params)
-
-    if params.restore_file:
-        restore_path = os.path.join(params.model_dir+"/checkpoints/", params.restore_file)
-        logging.info("Restoring parameters from {}".format(restore_path))
-        trainer.load_checkpoint(restore_path)
-
+    
     # load the saved model
     model_path = os.path.join(args.model_dir + "/checkpoints/", params.model_file)
     print("Restoring parameters from {}".format(model_path))
-    load_checkpoint(model_path, model)
+    model = Trainer.load_checkpoint(model, model_path)
 
     # instantiate a Translator object to translate SRC langauge using Greedy/Beam Decoding
     decoder = Translator(model, dev_iter, params, device)
