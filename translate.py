@@ -2,14 +2,13 @@
 import argparse
 import os
 import torch
+from torch.autograd import Variable
+from torch import optim
 from utils.data_loader import load_dataset
-from models.seq2seq import Encoder, Decoder, AttentionDecoder, Seq2Seq
-from models.attention import DotProductAttention, BahdanauAttention
 from utils.utils import HyperParams, load_checkpoint
+from models.seq2seq import make_seq2seq_model
 from utils.beam_search import beam_decode, beam_decode_iterative
-from models.seq2seq import Encoder, Decoder, Seq2Seq
 from tqdm import tqdm
-
 
 class Translator(object):
     """
@@ -138,28 +137,21 @@ def main(params, greedy, beam_size):
     _, dev_iter, DE, EN = load_dataset(params.data_path, params.min_freq, params.train_batch_size, params.dev_batch_size)
     de_size, en_size = len(DE.vocab), len(EN.vocab)
     print("[DE Vocab Size: ]: {}, [EN Vocab Size]: {}".format(de_size, en_size))
+
+    params.src_vocab_size = de_size
+    params.tgt_vocab_size = en_size
     params.pad_token = EN.vocab.stoi["<pad>"]
     params.eos_index = EN.vocab.stoi["</s>"]
     params.sos_index = EN.vocab.stoi["<s>"]
     params.itos = EN.vocab.itos
+       
+    # make the Seq2Seq model
+    model = make_seq2seq_model(params)
 
-    device = torch.device("cuda" if params.cuda else "cpu")
-    encoder = Encoder(src_vocab_size=de_size, embed_size=params.embed_size,
-                      hidden_size=params.hidden_size, input_dropout_p=params.input_dropout_p_enc,
-                      num_layers=params.n_layers_enc, dropout_p=params.dropout_p)
-
-    if "attention" in vars(params):
-        print("Decoding from Seq2Seq w/ ({0}) Attention...".format(params.attention))
-        decoder = AttentionDecoder(trg_vocab_size=en_size, embed_size=params.embed_size,
-                                   hidden_size=params.hidden_size, input_dropout_p=params.input_dropout_p_dec,
-                                   dropout_p=params.dropout_p, attention=params.attention, num_layers=params.n_layers_dec)
-    else:
-        print("Decoding from regular Seq2Seq model...")
-        decoder = Decoder(trg_vocab_size=en_size, embed_size=params.embed_size,
-                          hidden_size=params.hidden_size, input_dropout_p=params.input_dropout_p_dec,
-                          dropout_p=params.dropout_p, num_layers=params.n_layers_dec)
-
-    model = Seq2Seq(encoder, decoder, device).to(device)
+    if params.restore_file:
+        restore_path = os.path.join(params.model_dir+"/checkpoints/", params.restore_file)
+        logging.info("Restoring parameters from {}".format(restore_path))
+        trainer.load_checkpoint(restore_path)
 
     # load the saved model
     model_path = os.path.join(args.model_dir + "/checkpoints/", params.model_file)

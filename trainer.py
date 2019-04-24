@@ -4,6 +4,7 @@ from tqdm import tqdm
 from torch.nn import functional as F
 from torch.autograd import Variable
 from utils.utils import HyperParams, set_logger, RunningAverage
+from models.transformers.optim import ScheduledOptimizer
 from torch.nn.utils import clip_grad_norm
 from utils.utils import make_tgt_mask
 import time, math, os, shutil
@@ -43,7 +44,8 @@ class Trainer(object):
 
                 # run the data through the model
                 self.optimizer.zero_grad()
-                output = self.model(src, trg, src_mask, trg_mask)
+                output = self.model(src, trg, src_mask, trg_mask, src_lengths, trg_lengths)
+
                 output = output[:, :-1, :].contiguous().view(-1, self.params.tgt_vocab_size)
                 trg = trg[:, 1:].contiguous().view(-1)
 
@@ -53,7 +55,10 @@ class Trainer(object):
                 loss.backward()
 
                 # update the parameters
-                self.optimizer.step_and_update_lr()
+                if  isinstance(self.optimizer, ScheduledOptimizer):
+                    self.optimizer.step_and_update_lr()
+                else:
+                    self.optimizer.step()
 
                 # update the average loss
                 total_loss += loss.item()
@@ -87,7 +92,8 @@ class Trainer(object):
                         src, trg = src.cuda(), trg.cuda()
 
                     # run the data through the model
-                    output = self.model(src, trg, src_mask, trg_mask)
+                    output = self.model(src, trg, src_mask, trg_mask, src_lengths, trg_lengths)
+
                     output = output[:, :-1, :].contiguous().view(-1, self.params.tgt_vocab_size)
                     trg = trg[:, 1:].contiguous().view(-1)
 
@@ -124,17 +130,19 @@ class Trainer(object):
 
             is_best = val_loss_avg < self.best_val_loss
 
-              # save checkpoint
-            # self.save_checkpoint({
-            #     "epoch": epoch+1,
-            #     "state_dict": self.model.state_dict(),
-            #     "optim_dict": self.optimizer._optimizer.state_dict()},
-            #     is_best=is_best,
-            #     checkpoint=self.params.model_dir+"/checkpoints/")
+            optim_dict = self.optimizer._optimizer.state_dict() if isinstance(self.optimizer, ScheduledOptimizer) else self.optimizer.state_dict()
 
-            # if is_best:
-            #     print("- Found new lowest loss!")
-            #     self.best_val_loss = val_loss_avg
+            # save checkpoint
+            self.save_checkpoint({
+                "epoch": epoch+1,
+                "state_dict": self.model.state_dict(),
+                "optim_dict": optim_dict},
+                is_best=is_best,
+                checkpoint=self.params.model_dir+"/checkpoints/")
+
+            if is_best:
+                print("- Found new lowest loss!")
+                self.best_val_loss = val_loss_avg
 
     def epoch_time(self, start_time, end_time):
         """ Calculate the time to train a `model` on a single epoch """
@@ -173,5 +181,8 @@ class Trainer(object):
         checkpoint = torch.load(checkpoint)
         self.model.load_state_dict(checkpoint["state_dict"])
         if self.optimizer:
-            self.optimizer._optimizer.oad_state_dict(checkpoint["optim_dict"])
+            if isinstance(self.optimizer, ScheduledOptimizer):
+                self.optimizer._optimizer.load_state_dict(checkpoint["optim_dict"])
+            else:
+                self.optimizer.load_state_dict(checkpoint["optim_dict"])
         return checkpoint
