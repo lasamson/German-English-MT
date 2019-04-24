@@ -8,6 +8,16 @@ import copy
 import numpy as np
 from torch.autograd import Variable
 
+def get_clones(module, N):
+    """ 
+    Produce N identical layers 
+    Arguments:
+        module: the module (layer) to repeat N times 
+        N: number of identical layers
+    """
+    return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
+
+
 def mask_invalid_positions(max_seq_len):
     """ 
     Mask out invalid positions for Masked Multi-head Attention 

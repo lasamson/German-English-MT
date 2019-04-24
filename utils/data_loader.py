@@ -4,7 +4,7 @@ import spacy
 import torch
 
 
-def load_dataset(data_path, min_freq=5, train_batch_size=32, dev_batch_size=1):
+def load_dataset(data_path, min_freq=5, train_batch_size=32, dev_batch_size=1, max_len=50, max_size=40000):
     """
     Returns iterators for the training/dev dataset
 
@@ -28,17 +28,15 @@ def load_dataset(data_path, min_freq=5, train_batch_size=32, dev_batch_size=1):
     SRC = Field(tokenize=tokenize_de, init_token=None, eos_token="</s>", batch_first=True, include_lengths=True)
     TRG = Field(tokenize=tokenize_en, init_token="<s>", eos_token="</s>", batch_first=True, include_lengths=True)
 
-    MAX_LEN = 50
-    train_data = datasets.TranslationDataset(exts=("train.de", "train.en"), fields=(SRC, TRG), path=data_path, filter_pred=lambda x: len(vars(x)['src']) <= MAX_LEN and len(vars(x)['trg']) <= MAX_LEN)
+    train_data = datasets.TranslationDataset(exts=("train.de", "train.en"), fields=(SRC, TRG), path=data_path, filter_pred=lambda x: len(vars(x)['src']) <= max_len and len(vars(x)['trg']) <= max_len)
     dev_data = datasets.TranslationDataset(exts=("dev.de", "dev.en"), fields=(SRC, TRG), path=data_path)
 
-    SRC.build_vocab(train_data.src, max_size=40000)
-    TRG.build_vocab(train_data.trg, max_size=40000)
+    SRC.build_vocab(train_data.src, max_size=max_size)
+    TRG.build_vocab(train_data.trg, max_size=max_size)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     train_iterator = BucketIterator(train_data, batch_size=train_batch_size, train=True,
                                     sort_within_batch=True, sort_key=lambda x: (len(x.src), len(x.trg)),
                                     repeat=False, device=device)
     dev_iterator = Iterator(dev_data, batch_size=dev_batch_size, train=False, sort=False, repeat=False, device=device)
-
     return train_iterator, dev_iterator, SRC, TRG
