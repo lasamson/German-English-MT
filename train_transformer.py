@@ -36,12 +36,12 @@ def main(params):
     params.device = -1
 
     # make the transformer model with the given parameters
-    model = make_transformer(params)
-    # model = get_model(params, de_size, en_size)
+    model = make_transformer(params).to(device)
+    # model = get_model(params, de_size, en_size).to(device)
     
     optimizer = optim.Adam(model.parameters(), lr=params.lr)
     optimizer = ScheduledOptimizer(optim.Adam(model.parameters(), lr=params.lr), params.d_model, params.n_warmup_steps)
-    criterion = LabelSmoothingLoss(.01, params.tgt_vocab_size, params.pad_token)
+    criterion = LabelSmoothingLoss(.01, params.tgt_vocab_size, params.pad_token).to(device)
     trainer = Trainer(model, optimizer, criterion, params.epochs, train_iter, dev_iter, params)
     trainer.train()
 

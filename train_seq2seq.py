@@ -6,8 +6,7 @@ from torch import optim
 from torch.nn.utils import clip_grad_norm
 from torch.nn import functional as F
 from utils.data_loader import load_dataset
-from models.seq2seq import Encoder, AttentionDecoder, Decoder, Seq2Seq
-from models.attention import DotProductAttention, BahdanauAttention
+from models.seq2seq import Encoder, Decoder, Seq2Seq
 from utils.utils import HyperParams, set_logger, RunningAverage
 import os, sys, shutil
 import logging
@@ -48,7 +47,7 @@ class Trainer(object):
 
                 # run the data through the model
                 self.optimizer.zero_grad()
-                output = self.model(src, trg, src_lengths, trg_lengths, src_mask, tf_ratio=self.params.teacher_forcing_ratio)
+                output = self.model(src, trg, src_mask, None, src_lengths, trg_lengths)
                 output = output[:, :-1, :].contiguous().view(-1, self.params.tgt_vocab_size)
                 trg = trg[:, 1:].contiguous().view(-1)
 
@@ -93,7 +92,7 @@ class Trainer(object):
                         src, trg = src.cuda(), trg.cuda()
 
                     # run the data through the model
-                    output = self.model(src, trg, src_lengths, trg_lengths, src_mask, tf_ratio=1.0)
+                    output = self.model(src, trg, src_mask, None, src_lengths, trg_lengths)
                     output = output[:, :-1, :].contiguous().view(-1, self.params.tgt_vocab_size)
                     trg = trg[:, 1:].contiguous().view(-1)
 
@@ -129,17 +128,17 @@ class Trainer(object):
 
             is_best = val_loss_avg < self.best_val_loss
 
-              # save checkpoint
-            self.save_checkpoint({
-                "epoch": epoch+1,
-                "state_dict": self.model.state_dict(),
-                "optim_dict": self.optimizer.state_dict()},
-                is_best=is_best,
-                checkpoint=self.params.model_dir+"/checkpoints/")
+            # save checkpoint
+            # self.save_checkpoint({
+            #     "epoch": epoch+1,
+            #     "state_dict": self.model.state_dict(),
+            #     "optim_dict": self.optimizer.state_dict()},
+            #     is_best=is_best,
+            #     checkpoint=self.params.model_dir+"/checkpoints/")
 
-            if is_best:
-                logging.info("- Found new lowest loss!")
-                self.best_val_loss = val_loss_avg
+            # if is_best:
+            #     logging.info("- Found new lowest loss!")
+            #     self.best_val_loss = val_loss_avg
 
     def epoch_time(self, start_time, end_time):
         """ Calculate the time to train a `model` on a single epoch """
@@ -201,26 +200,22 @@ def main(params):
     params.pad_token = EN.vocab.stoi["<pad>"]
 
     device = torch.device('cuda' if params.cuda else 'cpu')
-    
+
     encoder = Encoder(src_vocab_size=de_size, embed_size=params.embed_size,
                     hidden_size=params.hidden_size, input_dropout_p=params.input_dropout_p_enc, 
                     num_layers=params.n_layers_enc, dropout_p=params.dropout_p)
 
-    if "attention" in vars(params):
-        logging.info("Running Seq2Seq w/ ({0}) Attention...".format(params.attention))
-        decoder = AttentionDecoder(trg_vocab_size=en_size, embed_size=params.embed_size,
-                        hidden_size=params.hidden_size, input_dropout_p=params.input_dropout_p_dec, 
-                        dropout_p=params.dropout_p, attention=params.attention, 
+    decoder = Decoder(trg_vocab_size=en_size, embed_size=params.embed_size,
+                        hidden_size=params.hidden_size, attention=params.attention, 
+                        input_dropout_p=params.input_dropout_p_dec, 
+                        dropout_p=params.dropout_p, device=device, 
                         num_layers=params.n_layers_dec)
-    else:
-        logging.info("Running regular Seq2Seq model...")
-        decoder = Decoder(trg_vocab_size=en_size, embed_size=params.embed_size,
-                        hidden_size=params.hidden_size, input_dropout_p=params.input_dropout_p_dec, 
-                        dropout_p=params.dropout_p, num_layers=params.n_layers_dec)
 
-    model = Seq2Seq(encoder, decoder, device).to(device)
+    model = Seq2Seq(encoder, decoder).to(device)
+
     optimizer = optim.Adam(model.parameters(), lr=params.lr)
     criterion = nn.CrossEntropyLoss(ignore_index=params.pad_token, reduction="sum")
+
     trainer = Trainer(model, optimizer, criterion, params.epochs, train_iter, dev_iter, params)
 
     if params.restore_file:

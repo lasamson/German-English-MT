@@ -125,16 +125,16 @@ class Trainer(object):
             is_best = val_loss_avg < self.best_val_loss
 
               # save checkpoint
-            self.save_checkpoint({
-                "epoch": epoch+1,
-                "state_dict": self.model.state_dict(),
-                "optim_dict": self.optimizer._optimizer.state_dict()},
-                is_best=is_best,
-                checkpoint=self.params.model_dir+"/checkpoints/")
+            # self.save_checkpoint({
+            #     "epoch": epoch+1,
+            #     "state_dict": self.model.state_dict(),
+            #     "optim_dict": self.optimizer._optimizer.state_dict()},
+            #     is_best=is_best,
+            #     checkpoint=self.params.model_dir+"/checkpoints/")
 
-            if is_best:
-                print("- Found new lowest loss!")
-                self.best_val_loss = val_loss_avg
+            # if is_best:
+            #     print("- Found new lowest loss!")
+            #     self.best_val_loss = val_loss_avg
 
     def epoch_time(self, start_time, end_time):
         """ Calculate the time to train a `model` on a single epoch """
