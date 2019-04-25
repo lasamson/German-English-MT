@@ -3,7 +3,7 @@ import numpy as np
 
 class ScheduledOptimizer():
     """ 
-    A simple wrapper class for learning rate scheduling .
+    A simple wrapper class for learning rate scheduling.
     Vary the learning rate over the course of traning.
     Increase the learning rate linearly for `n_warmup_steps`
     training steps and decreasing it proportionally to the inverse

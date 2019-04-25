@@ -76,7 +76,7 @@ class TransformerEncoder(nn.Module):
         # Layer Norm on the output of the Encoder
         self.output_layer_norm = LayerNorm(d_model)
 
-    def forward(self, src, src_mask):
+    def forward(self, src, src_mask, src_lengths=None):
 
         # sum the Token Embeddings and Positional Encodings
         x = self.positional_encodings(self.embeddings(src))
@@ -88,4 +88,4 @@ class TransformerEncoder(nn.Module):
         # layer norm on the output
         x = self.output_layer_norm(x)
 
-        return x 
+        return x, None

@@ -131,7 +131,7 @@ class TransformerDecoder(nn.Module):
         A Tensor of shape [batch_size, seq_len, d_model]
     """
     def __init__(self, embedding_size, tgt_vocab_size, d_model, num_layers, num_heads, max_length, d_ff=2048, input_dropout=0.0, \
-                layer_dropout=0.0, attention_dropout=0.0, relu_dropout=0.0):
+                layer_dropout=0.1, attention_dropout=0.1, relu_dropout=0.1):
         super().__init__()
 
         self.num_layers = num_layers
@@ -146,7 +146,7 @@ class TransformerDecoder(nn.Module):
         # Layer Norm on the output of the Decoder
         self.output_layer_norm = LayerNorm(d_model)
     
-    def forward(self, trg, encoder_outputs, src_mask, trg_mask):
+    def forward(self, trg, encoder_outputs, src_mask, trg_mask, encoder_final=None, hidden=None):
         
         # sum the Embeddings and Positional Encodings
         x = self.positional_encodings(self.embeddings(trg))

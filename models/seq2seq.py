@@ -20,8 +20,11 @@ class EncoderDecoder(nn.Module):
     def forward(self, src, tgt, src_mask, tgt_mask, src_lengths=None, trg_lengths=None):
         encoder_outputs, encoder_final = self.encode(src, src_mask, src_lengths)
 
-        # last hidden state of the Encoder is used as the initial hidden state of the Decoder
-        encoder_final = encoder_final[:self.decoder.num_layers] # [num_layers, batch, 2 * hidden_size]]
+        if isinstance(self.decoder, GRUDecoder):
+            # last hidden state of the Encoder is used as the initial hidden state of the Decoder
+            encoder_final = encoder_final[:self.decoder.num_layers] # [num_layers, batch, 2 * hidden_size]]
+        else:
+            encoder_final = None
 
         decoder_output = self.decode(tgt, encoder_outputs, src_mask, tgt_mask, encoder_final=encoder_final, decoder_hidden=None)
         logits = self.generator(decoder_output)
