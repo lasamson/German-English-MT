@@ -1,5 +1,8 @@
 # Neural Machine Translation (German to English)
 
+
+# Reproduce Baseline Models
+
 # Usage
 To train our models:
 
@@ -17,7 +20,6 @@ python translate.py -data_path="./data/" -model_dir="./experiments/seq2seq/" -mo
 | Model                            	| Greedy Decoding 	| Beam Search  	|
 |----------------------------------	|-----------------	|--------------	|
 | Seq2Seq                          	|                 	|              	|
-| Seq2Seq w/ Bahdanau Attention    	|                 	|              	|
-| Seq2Seq w/ Dot Product Attention 	|                 	|              	|
+| Seq2Seq w/ Bahdanau Attention    	| 22.1             	|              	|
 | Transformer 	                    |                 	|              	|
 | Transformer with LISA             |                   |               |

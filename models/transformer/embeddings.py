@@ -39,7 +39,7 @@ class PositionalEncoder(nn.Module):
     Returns:
         A Tensor of shape [batch_size, seq_len, d_model]
     """
-    def __init__(self, d_model, max_seq_len=100, input_dropout=0.1):
+    def __init__(self, d_model, max_seq_len=1000, input_dropout=0.1):
         super().__init__()
         self.d_model = d_model
         self.dropout = nn.Dropout(input_dropout)

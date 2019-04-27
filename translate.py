@@ -1,17 +1,23 @@
-""" Perform either greedy decoding or beam search on a trained model """
+#!/usr/bin/env python
+""" 
+Perform either greedy decoding or beam search on a trained model 
+and evaluates the translations using BLEU score
+"""
 import argparse
+import subprocess
 import os
 import torch
 from torch.autograd import Variable
 from torch import optim
+from tqdm import tqdm
+import logging
+from utils.trainer import Trainer
+from utils.translator import Translator
 from utils.data_loader import load_dataset
 from utils.utils import HyperParams, load_checkpoint
 from models.seq2seq import make_seq2seq_model
 from utils.beam_search import beam_decode, beam_decode_iterative
-from tqdm import tqdm
-import logging
-from trainer import Trainer
-from translator import Translator
+
 
 def main(params, greedy, beam_size):
     """
@@ -22,7 +28,8 @@ def main(params, greedy, beam_size):
         beam_size: size of beam if doing beam search
     """
     print("Loading dataset...")
-    _, dev_iter, DE, EN = load_dataset(params.data_path, params.min_freq, params.train_batch_size, params.dev_batch_size)
+    _, dev_iter, DE, EN = load_dataset(
+        params.data_path, params.train_batch_size, params.dev_batch_size)
     de_size, en_size = len(DE.vocab), len(EN.vocab)
     print("[DE Vocab Size: ]: {}, [EN Vocab Size]: {}".format(de_size, en_size))
 
@@ -38,39 +45,55 @@ def main(params, greedy, beam_size):
 
     # make the Seq2Seq model
     model = make_seq2seq_model(params)
-    
+
     # load the saved model
-    model_path = os.path.join(args.model_dir + "/checkpoints/", params.model_file)
+    model_path = os.path.join(
+        args.model_dir + "/checkpoints/", params.model_file)
     print("Restoring parameters from {}".format(model_path))
     model = Trainer.load_checkpoint(model, model_path)
 
-    # instantiate a Translator object to translate SRC langauge using Greedy/Beam Decoding
+    # instantiate a Translator object to translate SRC langauge to TRG language using Greedy/Beam Decoding
     decoder = Translator(model, dev_iter, params, device)
 
     if greedy:
         print("Doing Greedy Decoding...")
-        greedy_outputs = decoder.greedy_decode(max_len=50)
-        decoder.output_decoded_translations(greedy_outputs, "greedy_outputs.en")
+        greedy_outputs = decoder.greedy_decode(max_len=100)
+        decoder.output_decoded_translations(
+            greedy_outputs, "greedy_outputs.en")
+
+        print("Evaluating BLEU Score on Greedy Tranlsation...")
+        subprocess.call(['./utils/eval.sh', params.model_dir +
+                         "outputs/greedy_outputs.en"])
 
     if beam_size:
         print("Doing Beam Search...")
-        beam_search_outputs = decoder.beam_search(beam_width=beam_size, num_sentences=5)
-        print(beam_search_outputs)
-        decoder.output_decoded_translations(beam_search_outputs, "beam_search_outputs_size={}.en".format(beam_size))
+        beam_search_outputs = decoder.beam_decode(
+            beam_width=beam_size, num_sentences=5)
+        decoder.output_decoded_translations(
+            beam_search_outputs, "beam_search_outputs_size={}.en".format(beam_size))
+
+        print("Evaluating BLEU Score on Beam Search Translation")
+        subprocess.call(['./utils/eval.sh', params.model_dir +
+                         "outputs/beam_search_outputs_size={}.en".format(beam_size)])
 
 
 if __name__ == "__main__":
-    p = argparse.ArgumentParser(description="Obtain BLEU scores for trained models")
+    p = argparse.ArgumentParser(
+        description="Obtain BLEU scores for trained models")
     p.add_argument("-data_path", type=str, help="location of data")
     p.add_argument("-model_dir", type=str, help="Directory containing model")
-    p.add_argument("-model_file", type=str, help="Model file (must be contained in the `checkpoints` directory in model_dir)")
-    p.add_argument("-greedy", action="store_true", help="greedy decoding on outputs")
-    p.add_argument("-beam_size", type=int, default=5, help="Beam Search on outputs")
+    p.add_argument("-model_file", type=str,
+                   help="Model file (must be contained in the `checkpoints` directory in model_dir)")
+    p.add_argument("-greedy", action="store_true",
+                   help="greedy decoding on outputs")
+    p.add_argument("-beam_size", type=int, default=5,
+                   help="Beam Search on outputs")
 
     args = p.parse_args()
 
     json_params_path = os.path.join(args.model_dir, "params.json")
-    assert os.path.isfile(json_params_path), "No JSON configuration file found at {}".format(json_params_path)
+    assert os.path.isfile(
+        json_params_path), "No JSON configuration file found at {}".format(json_params_path)
     params = HyperParams(json_params_path)
 
     params.data_path = args.data_path

@@ -10,11 +10,11 @@ class ScheduledOptimizer():
     square root of the step number
     """
 
-    def __init__(self, optimizer, d_model, n_warmup_steps=4000):
+    def __init__(self, optimizer, d_model, init_lr=None, n_warmup_steps=4000):
         self._optimizer = optimizer
         self.n_warmup_steps = n_warmup_steps
         self.n_current_steps = 0
-        self.init_lr = np.power(d_model, -0.5)
+        self.init_lr = init_lr if init_lr else np.power(d_model, -0.5)
 
     def step_and_update_lr(self):
         """ Step with the inner optimizer """

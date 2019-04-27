@@ -33,7 +33,7 @@ bpe_vocab=$datadir/bpe/bpe.32000
 ###########################################
 echo `date '+%Y-%m-%d %H:%M:%S'` "- Tokenizing text using Moses Tokenizer"
 # (1) Tokenize text using Moses Tokenizer
-for l in en de; do for f in $datadir/*.$l; do perl tokenizer.perl -a -no-escape -l $l -q  < $f > $tokdir/"$(cut -d'/' -f4 <<<$f)".atok; done; done
+for l in en de; do for f in $datadir/*.$l; do perl $workdir/utils/tokenizer/tokenizer.perl -a -no-escape -l $l -q  < $f > $tokdir/"$(cut -d'/' -f4 <<<$f)".atok; done; done
 
 ###########################################
 

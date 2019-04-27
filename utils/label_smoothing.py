@@ -3,6 +3,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
+
 class LabelSmoothingLoss(nn.Module):
     """
     Use LabelSmoothing to compute the loss
@@ -19,10 +20,13 @@ class LabelSmoothingLoss(nn.Module):
         assert 0.0 <= label_smoothing <= 1.0, "Label Smoothing parameter must between 0 and 1"
         super().__init__()
         self.pad_index = pad_index
-        smoothing_value = label_smoothing / (tgt_vocab_size - 2) # (-2 to account for padding token)
-        one_hot = torch.full((tgt_vocab_size,), smoothing_value) # [tgt_vocab_size]
+        # (-2 to account for padding token)
+        smoothing_value = label_smoothing / (tgt_vocab_size - 2)
+        # [tgt_vocab_size]
+        one_hot = torch.full((tgt_vocab_size,), smoothing_value)
         one_hot[self.pad_index] = 0
-        self.register_buffer("one_hot", one_hot.unsqueeze(0)) # [1, tgt_vocab_size]
+        # [1, tgt_vocab_size]
+        self.register_buffer("one_hot", one_hot.unsqueeze(0))
         self.confidence = 1.0 - label_smoothing
 
     def forward(self, output, target):
@@ -30,11 +34,9 @@ class LabelSmoothingLoss(nn.Module):
         output (FloatTensor): [batch_size * seq_len,  trg_vocab_size]
         target (Long Tensor): [batch_size * seq_len]
         """
-        # apply softmax and log 
         output = output.type(torch.DoubleTensor)
-        output = F.log_softmax(output, dim=-1)
-
-        model_prob = self.one_hot.repeat(target.size(0), 1) # [batch_size, tgt_vocab_size]
+        # [batch_size, tgt_vocab_size]
+        model_prob = self.one_hot.repeat(target.size(0), 1)
         model_prob.scatter_(1, target.unsqueeze(1), self.confidence)
         model_prob.masked_fill_((target == self.pad_index).unsqueeze(1), 0)
         return F.kl_div(output, model_prob.type(torch.DoubleTensor), reduction='sum')

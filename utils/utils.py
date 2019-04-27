@@ -1,3 +1,4 @@
+""" A set of utitilies of NMT Project """
 import torch
 import json
 import os
@@ -7,6 +8,7 @@ from torch import nn
 import copy
 import numpy as np
 from torch.autograd import Variable
+
 
 def get_clones(module, N):
     """ 
@@ -31,6 +33,7 @@ def mask_invalid_positions(max_seq_len):
     mask = np.triu(np.ones(attn_shape), k=1).astype("uint8")
     return torch.from_numpy(mask) == 0
 
+
 def make_tgt_mask(tgt, tgt_pad):
     """ 
     Make the mask for the target to hide padding and future words 
@@ -43,8 +46,10 @@ def make_tgt_mask(tgt, tgt_pad):
         a mask of size [batch_size, seq_len, seq_len] 
     """
     tgt_mask = (tgt != tgt_pad).unsqueeze(-2)
-    tgt_mask = tgt_mask & Variable(mask_invalid_positions(tgt.size(-1)).type_as(tgt_mask.data))
+    tgt_mask = tgt_mask & Variable(
+        mask_invalid_positions(tgt.size(-1)).type_as(tgt_mask.data))
     return tgt_mask
+
 
 def save_checkpoint(state, is_best, checkpoint):
     """
@@ -92,17 +97,20 @@ def set_logger(log_path):
     """
 
     logger = logging.getLogger()
-    logger.setLevel(logging.INFO)  # INFO: confirmation that things are working as expected
+    # INFO: confirmation that things are working as expected
+    logger.setLevel(logging.INFO)
 
     if not logger.handlers:
         file_handler = logging.FileHandler(log_path)
-        file_handler.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s: %(message)s'))
+        file_handler.setFormatter(logging.Formatter(
+            '%(asctime)s:%(levelname)s: %(message)s'))
         logger.addHandler(file_handler)
 
         # Logging to console
         stream_handler = logging.StreamHandler()
         stream_handler.setFormatter(logging.Formatter('%(message)s'))
         logger.addHandler(stream_handler)
+
 
 class RunningAverage():
     """ A class that maintains the running average of a quanity """
@@ -121,6 +129,7 @@ class RunningAverage():
 
 class HyperParams():
     """ Class that loads hyperparams for a particular `model` from a JSON file  """
+
     def __init__(self, json_path):
         with open(json_path) as f:
             params = json.load(f)
@@ -140,3 +149,33 @@ class HyperParams():
     def dict(self):
         """ Give dict-like access to Params """
         return self.__dict__
+
+
+def tile(x, count, dim):
+    """
+    Tiles x on dimension dim count times. From OpenNMT. Used for beam search.
+    :param x: tensor to tile
+    :param count: number of tiles
+    :param dim: dimension along which the tensor is tiled
+    :return: tiled tensor
+    """
+    if isinstance(x, tuple):
+        h, c = x
+        return tile(h, count, dim=dim), tile(c, count, dim=dim)
+
+    perm = list(range(len(x.size())))
+    if dim != 0:
+        perm[0], perm[dim] = perm[dim], perm[0]
+        x = x.permute(perm).contiguous()
+    out_size = list(x.size())
+    out_size[0] *= count
+    batch = x.size(0)
+    x = x.view(batch, -1) \
+        .transpose(0, 1) \
+        .repeat(count, 1) \
+        .transpose(0, 1) \
+        .contiguous() \
+        .view(*out_size)
+    if dim != 0:
+        x = x.permute(perm).contiguous()
+    return x

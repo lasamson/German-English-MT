@@ -30,7 +30,7 @@ if __name__ == '__main__':
     p.add_argument('-nenc', '--n_layers_enc', type=int, default=2, help='Num layers in encoder')
     p.add_argument('-ndec', '--n_layers_dec', type=int, default=2, help='Num layers in decoder')
     p.add_argument('-maxlen', '--max_length', type=int, default=50, help='Max length of sequence')
-    p.add_argument('-lr', '--lr', type=float, default=.001, help='Learning rate')
+    p.add_argument('-lr', '--lr', type=float, default=0.0001, help='Learning rate')
     p.add_argument('-gc', '--grad_clip', type=float, default=5.0, help='Gradient clipping threshold')
     p.add_argument('-tf', '--teacher_forcing_ratio', type=float, default=1.0, help='Teacher forcing ratio') 
     p.add_argument('-attention', '--attention', type=str, default=None, help='Attention applied to Seq2Seq')
