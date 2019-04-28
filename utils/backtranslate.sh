@@ -8,10 +8,10 @@ num_synth=$1
 # directories
 workdir="."
 datapath=$workdir/data
-pretrained_model=$datapath/wmt18ensemble/wmt18.model1.pt
-monolingual=$datapath/europarl-v7.de-en
-bpepath=$datapath/iwslt/bpe
-binpath=$datapath/iwslt/bin
+pretrained_model=$datapath/wmt18ensemble/wmt18.model1.pt # path to pretrained model (EN -> DE) for backtranslation
+monolingual=$datapath/europarl-v7.de-en # folder containing monolingual data (contains europarl-v7.de-en.en)
+bpepath=$datapath/iwslt/bpe # path to bpe parallel data
+binpath=$datapath/iwslt/bin # path to write to (binary output)
 
 echo $datapath
 echo $pretrained_model
@@ -28,6 +28,9 @@ echo "monolingual data filtered..."
 
 # preprocess monolingual data
 echo "preprocessing monolingual data..."
+# only-source flag to indicate only preprocess source
+# trainpref expects the monolingual data folder??
+# destdir should be where it outputs the binary data, should be bin folder, but was testing it out with monolingual
 fairseq-preprocess --source-lang en --target-lang de --only-source \
     --trainpref $monolingual --destdir $monolingual
 echo "monolingual data preprocessed..."
