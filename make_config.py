@@ -60,6 +60,12 @@ if __name__ == '__main__':
                    default=0.1, help='Label smoothing rate')
     p.add_argument('-dff', '--d_ff', type=int, default=2048,
                    help='Size of intermiediate hidden layer in Positionwise Feed Forward Net')
+    p.add_argument('-boost', "--boost", action="store_true",
+                   help="Apply boosting to training procedure")
+    p.add_argument('-bw', "--boost_warmup", type=int, default=3,
+                   help="Number of training epochs to do before boosting")
+    p.add_argument('-bp', "--boost_percent", type=float, default=0.20,
+                   help="Percentage of data points to add to the original data")
     p.add_argument('-warmup', '--n_warmup_steps', type=int,
                    default=4000, help='Number of warmup steps for learning rate')
     p.add_argument('-exp_name', '--experiment_name', type=str,
@@ -73,7 +79,8 @@ if __name__ == '__main__':
 
     common_params = ['epochs', 'min_freq', 'train_batch_size', 'dev_batch_size', 'embed_size', 'n_layers_enc',
                      'n_layers_dec', 'max_length', 'lr', 'grad_clip', 'teacher_forcing_ratio', 'input_dropout',
-                     'layer_dropout', 'tgt_emb_prj_weight_sharing', 'emb_src_tgt_weight_sharing', 'exp_name', 'model_type']
+                     'layer_dropout', 'tgt_emb_prj_weight_sharing', 'emb_src_tgt_weight_sharing', 'exp_name', 'model_type',
+                     'boost', 'boost_warmup', 'boost_percent']
 
     model2args = {
         'GRU': common_params + ['hidden_size', 'attention'],
