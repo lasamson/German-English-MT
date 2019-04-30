@@ -44,7 +44,7 @@ class Trainer(object):
         self.max_num_epochs = num_epochs
         self.best_val_loss = float("inf")
 
-    def train_epoch(self, data_iter, boost_percent=.20):
+    def train_epoch(self, data_iter):
         """
         Train Encoder-Decoder model for one single epoch
         """
@@ -70,7 +70,6 @@ class Trainer(object):
                 src_mask = (src != self.params.pad_token).unsqueeze(-2)
                 # [batch_size, trg_seq_len, trg_seq_len]
                 trg_mask = make_tgt_mask(trg, self.params.pad_token)
-                print(trg.size())
                 if self.params.cuda:
                     src, trg = src.cuda(), trg.cuda()
 
@@ -88,7 +87,8 @@ class Trainer(object):
                 
                 assert output.size(0) == trg.size(0)
 
-                #TODO: compute perplexity, add to ex_to_perp (if boost==True)
+                # Compute perplexity, update ex_to_perp for corresponding 
+                # (src,trg) pairs (if boost==True)
                 if self.params.boost:
                     perplexity_per_example = [pp.item() for pp in list(self.compute_perplexity_on_batch(output, trg, trg_batch_size, trg_seq_len - 1))]
                     for i in range(trg_batch_size):
@@ -112,10 +112,11 @@ class Trainer(object):
                 t.update()
                 torch.cuda.empty_cache()
 
-        #TODO: Sort ex_to_perp by value to get list of examples, store top 20% in new_examples
-        sorted_examples = sorted(ex_to_perp.items(), key=lambda kv: kv[1], reverse=True)
-        slice_index = int(boost_percent * len(sorted_examples))
-        new_examples = sorted_examples[:slice_index]
+        # Sort ex_to_perp by value to get list of examples, store top 20% in new_examples
+        if self.params.boost:
+            sorted_examples = sorted(ex_to_perp.items(), key=lambda kv: kv[1], reverse=True)
+            slice_index = int(self.params.boost_percent * len(sorted_examples))
+            new_examples = sorted_examples[:slice_index]
 
         loss_per_word = total_loss/n_word_total
         return loss_per_word, new_examples
@@ -193,8 +194,6 @@ class Trainer(object):
         print("Starting training for {} epoch(s)".format(
             self.max_num_epochs - self.epoch))
 
-
-
         current_examples = list(self.train_iter.data())
         if not self.params.boost_warmup:
             hard_training_instances = []
@@ -205,35 +204,32 @@ class Trainer(object):
 
             # train the model the train set
             epoch_start_time = time.time()
-            #TODO: make a copy of train_iter, add new examples to it, and pass it into train_epoch()
+
+            # Make a copy of train_iter, add new examples to it (if boost==True), 
+            # and pass it into train_epoch()
             data_iterator = self.train_iter
 
-
+            # If boost==True and epochs are past warmup, perform boosting
             if self.params.boost and epoch+1 > self.params.boost_warmup:
                 print("boosting....")
                 example_objs = []
                 for i in range(len(hard_training_instances)):
+                    # Create new Example objects for training instanes with higheset perplexity
                     example = Example()
                     setattr(example, "src", list(hard_training_instances[i][0][0]))
                     setattr(example, "trg", list(hard_training_instances[i][0][1]))
                     example_objs.append(example)
             
-                # data_iterator = self.train_iter
                 existing_data = self.train_iter.data()
                 existing_data.extend(example_objs)
-                print(len(existing_data))
 
+                # Create new Dataset and iterator on the boosted data
                 new_dataset = Dataset(existing_data, fields=[("src", self.params.SRC), ("trg", self.params.TRG)])
-                print(new_dataset)            
                 data_iterator = DataIterator(new_dataset, batch_size=self.params.train_batch_size, device=self.params.device,
                                   repeat=False, sort_key=lambda x: (len(x.src), len(x.trg)),
                                   batch_size_fn=batch_size_fn, train=True, sort_within_batch=True, shuffle=True)
-                print(data_iterator)
             
             train_loss_avg, hard_training_instances = self.train_epoch(data_iterator)
-
-
-           #TODO: Create new Example objects for training instanes with higheset perplexity
 
             epoch_end_time = time.time()
             epoch_mins, epoch_secs = self.epoch_time(
