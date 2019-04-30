@@ -8,12 +8,26 @@ from models.attention import DotProductAttention, BahdanauAttention
 from .transformer.embeddings import Embedder, PositionalEncoder
 from .transformer.layers import EncoderLayer, DecoderLayer
 from .transformer.sublayers import LayerNorm
+from .weight_drop import WeightDrop
 from utils.utils import get_clones
+from .embed_dropout import embedded_dropout
+from .variational_dropout import VariationalDropout
 
 
 class GRUDecoder(nn.Module):
     """
     Conditional GRU Decoder that decodes the source sequence into the target sequence
+
+    Arguments:
+        trg_vocab_size: Size ot the Target Vocab
+        embed_size: Embedding size of the Decoder
+        hidden_size: Hidden size of the Decoder
+        attention: Type of attention to apply (dot, bahdanau, None)
+        input_dropout_p: Amount of dropout applied to the embedding layer (dropout full words)
+        dropout_p: Dropout applied inbetween layers of the Decoder, using Variational Dropout
+        device: GPU/CPU device 
+        bridge: Use a lienar layer to bridge the final hidden state from the Encoder to the initial hidden state of the Decoder
+        num_layers: Number of layers of the Decoder
     """
 
     def __init__(self, trg_vocab_size, embed_size, hidden_size, attention, input_dropout_p, dropout_p, device, bridge=True, num_layers=1):
@@ -23,16 +37,21 @@ class GRUDecoder(nn.Module):
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.device = device
+        self.input_droput_p = input_dropout_p
+        self.dropout_p = dropout_p
+        self.dropout_layer = nn.Dropout(dropout_p)
         self.embed = nn.Embedding(trg_vocab_size, embed_size)
         self.attention = DotProductAttention(hidden_size=hidden_size) if attention == "dot" else BahdanauAttention(
             hidden_size=hidden_size) if attention is not None else None
-        self.dropout = nn.Dropout(input_dropout_p)
-        self.gru = nn.GRU(embed_size + 2 * hidden_size, hidden_size,
-                          num_layers, dropout=dropout_p, batch_first=True)
+        self.gru_list = [WeightDrop(nn.GRU(input_size=self.embed_size + 2 * hidden_size if num_layer == 0 else self.hidden_size,
+                                           hidden_size=hidden_size, batch_first=True))
+                         for num_layer in range(self.num_layers)]
+        self.gru = nn.ModuleList(self.gru_list)
         self.bridge = nn.Linear(
             2 * hidden_size, hidden_size, bias=True) if bridge else None
         self.pre_output_layer = nn.Linear(
             embed_size + 2 * hidden_size + hidden_size, hidden_size)
+        self.variational_dropout = VariationalDropout()
 
     def forward_step(self, prev_embed, encoder_final, hidden, encoder_hidden=None, src_mask=None, projected_keys=None):
         """
@@ -63,29 +82,48 @@ class GRUDecoder(nn.Module):
                 query=query, projected_keys=projected_keys,
                 values=encoder_hidden, mask=src_mask)
         else:
-            # [batch_size, 1, 2*hidden_size]
+            # [num_layers, batch_size, 2*hidden_size] ==> [batch_size, 1, 2*hidden_size]
             context = encoder_final[-1].unsqueeze(1)
 
         # update the GRU input
         embed_con = torch.cat((prev_embed, context), dim=2)
 
         # run the input through the GRU for one timestep
-        outputs, hidden = self.gru(embed_con, hidden)
+        # ouputs => [batch_size, 1, hidden_size]
+        outputs = embed_con
+        hidden_states = []
+        for l, gru in enumerate(self.gru):
+
+            # pass the embedding input
+            outputs, new_hidden = gru(outputs, hidden[l].unsqueeze(0))
+            hidden_states.append(new_hidden)
+
+            if l != self.num_layers - 1:
+                # apply variational dropout to the input for the RNN
+                outputs = self.variational_dropout(
+                    outputs, dropout=self.dropout_p)
+
+        hidden = torch.cat(hidden_states, dim=0)
 
         # concatenate the embedding vector, output vector from GRU and context vector together
-        # to form a tensor of shape [batch_size, 1, hidden_size + hidden_size*2, embed_size]
+        # to form a tensor of shape [batch_size, 1, hidden_size + hidden_size*2 + embed_size]
         outputs = torch.cat(
             (prev_embed.squeeze(1), outputs.squeeze(1), context.squeeze(1)), dim=1)
+
         # [batch, 1 , hidden_size] => [batch, hidden_size]
         outputs = outputs.squeeze(1)
 
-        # pass the `output` through a linear layer to get a tensor of size [batch, seq_len, hidden_size]
-        # [batch, hidden_size] => [batch, hidden_size]
+        # pass the `outputs` through a linear layer to get a tensor of size [batch, seq_len, hidden_size]
+        # [batch, hidden_size + hidden_size * 2 + embed_size] => [batch, hidden_size]
+        outputs = self.dropout_layer(outputs)
         outputs = self.pre_output_layer(outputs)
         return outputs, hidden
 
     def forward(self, trg, encoder_hidden, src_mask, trg_mask, encoder_final, hidden=None):
-        embed = self.dropout(self.embed(trg))  # [batch, seq_len, V]
+        # Apply Embedding Dropout to dropout full words
+        # Embed ==> [batch, seq_len, V]
+        embed = embedded_dropout(self.embed, trg,
+                                 dropout=self.input_droput_p if self.training else 0)
 
         # initialize the decoder hidden state using the final encoder hidden state
         # [num_layers, batch_size, 2*hidden_size] => [num_layers, batch_size, hidden_size]
@@ -94,21 +132,40 @@ class GRUDecoder(nn.Module):
 
         # project the keys (encoder hidden states)
         # projected_keys => [batch_size, seq_len, 2*hidden_size]
-
         if self.attention is not None:
             projected_keys = self.attention.key_layer(encoder_hidden)
         else:
             projected_keys = None
 
+        # hold the ouputs from the Decoding process
+        # [batch_size, seq_len, hidden_size]
         outputs = torch.zeros(trg.size(1), trg.size(
             0), self.hidden_size, device=self.device)
 
+        # this decodes the SRC sequence one word (timestep) a time
+        # uses teacher forcing (use ground truth TRG sequence as input to the decoder)
         for t in range(trg.size(1)):
+
+            # get the embedding for the current word at the `t`_th timestep
             prev_embed = embed[:, t, :].unsqueeze(1)  # [batch, 1, V]
+
+            # perform one foward step in the Decoder
+            # to get the ouput prediction (word) at the
+            # current timestep.
+            # also get the new hidden state for the Decoder
             output, hidden = self.forward_step(
                 prev_embed, encoder_final, hidden, encoder_hidden, src_mask, projected_keys)
+
+            # save the output word to the `outputs` tensor
             outputs[t] = output
-        return outputs.transpose(0, 1), hidden
+
+        # apply Variational Dropout on the output tensor
+        # outputs => [batch_size, seq_len, hidden_size]
+        # this tensor will become input a Generator (softmax linear layer)
+        outputs = outputs.transpose(0, 1)
+        outputs = self.variational_dropout(x=outputs, dropout=self.dropout_p)
+
+        return outputs, hidden
 
     def init_hidden(self, encoder_final):
         """

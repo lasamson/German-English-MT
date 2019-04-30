@@ -1,4 +1,4 @@
-""" Implementation of various type of attention mechanisms """
+
 import random
 import torch
 from torch import nn
@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 import math
 import numpy as np
+
 
 class ScaledDotProductAttention(nn.Module):
     """
@@ -16,7 +17,7 @@ class ScaledDotProductAttention(nn.Module):
 
     Arguments:
         attn_dropout: Amount of dropout to apply to the attention scores
-    
+
     Returns: 
         A Tensor of shape [batch_size, num_heads, seq_len, d_model/num_heads]
     """
@@ -24,29 +25,30 @@ class ScaledDotProductAttention(nn.Module):
     def __init__(self, attn_dropout=0.1):
         super().__init__()
         self.attn_dropout = nn.Dropout(attn_dropout)
-    
+
     def forward(self, query, key, value, mask):
-        d_k = query.size(-1) # get the size of the query
+        d_k = query.size(-1)  # get the size of the query
 
         # compute unnormalized scores
         # query: [batch_size, num_heads, seq_len, d_k]
         # keys: [batch_size, num_heads, seq_len, d_k]
         # [batch_size, num_heads, seq_len, d_k] * [batch_size, num_heads, d_k, seq_len] => [batch_size, num_heads, seq_len, seq_len]
-        scores = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(d_k) 
+        scores = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(d_k)
 
         # apply mask to scores if given
         if mask is not None:
             scores = scores.masked_fill(mask == 0, -1e9)
 
         # compute normalized attention scores
-        attention_scores = F.softmax(scores, dim=-1) # [batch_size, num_heads, seq_len, seq_len]
+        # [batch_size, num_heads, seq_len, seq_len]
+        attention_scores = F.softmax(scores, dim=-1)
 
         # apply dropout to the attention scores
-        attention_scores = self.attn_dropout(attention_scores) 
+        attention_scores = self.attn_dropout(attention_scores)
 
         # [batch_size, num_heads, seq_len, seq_len]  * [batch_size, num_heads, seq_len, d_model/num_heads] => [batch_size, num_heads, seq_len, d_model/num_heads]
         return torch.matmul(attention_scores, value), attention_scores
-       
+
 
 class DotProductAttention(nn.Module):
     """ Implementation of Dot Product Attention """
@@ -65,12 +67,14 @@ class DotProductAttention(nn.Module):
         # mask out invalid positions (PAD tokens)
         # the mask is of shape (batch_size, 1, seq_len)
         # Give pad tokens a -infinity scores
-        scores.data.masked_fill_(mask == 0, -float('inf'))  # (batch_size, 1, seq_len)
+        # (batch_size, 1, seq_len)
+        scores.data.masked_fill_(mask == 0, -float('inf'))
         attention_scores = F.softmax(scores, dim=2)  # (batch_size, 1, seq_len)
         self.attention_scores = attention_scores
 
         # create context vector (weight average of attention scores and encoder hidden states)
-        context_vector = torch.bmm(attention_scores, values)  # (batch_size, 1, hidden_size)
+        # (batch_size, 1, hidden_size)
+        context_vector = torch.bmm(attention_scores, values)
 
         return context_vector, attention_scores
 
@@ -97,7 +101,8 @@ class BahdanauAttention(nn.Module):
         assert mask is not None, "Mask is required inroder to perform attention"
 
         # project the query (decoder hidden state)
-        query = self.query_layer(query)  # (batch_size, 1, D) ==> (batch_size, 1, hidden_size)
+        # (batch_size, 1, D) ==> (batch_size, 1, hidden_size)
+        query = self.query_layer(query)
 
         # compute the attention scores
         scores = self.score(query, projected_keys)  # [batch_size, 1, seq_len]
@@ -105,14 +110,16 @@ class BahdanauAttention(nn.Module):
         # mask out invalid positions (PAD tokens)
         # the mask is of shape (batch_size, 1, seq_len)
         # Give pad tokens a -infinity scores
-        scores.data.masked_fill_(mask == 0, -float('inf'))  # (batch_size, 1, seq_len)
+        # (batch_size, 1, seq_len)
+        scores.data.masked_fill_(mask == 0, -float('inf'))
 
         attention_scores = F.softmax(scores, dim=2)  # (batch_size, 1, seq_len)
         self.attention_scores = attention_scores
 
         # value => (batch_size, seq_len, hidden_size)
         # attention_scores => (batch_size, 1, seq_len)
-        context_vector = torch.bmm(attention_scores, values)  # (batch_size, 1, hidden_size)
+        # (batch_size, 1, hidden_size)
+        context_vector = torch.bmm(attention_scores, values)
 
         # context shape: [batch_size, 1, hidden_size], attention_scores: [batch_size, 1, seq_len]
         return context_vector, attention_scores

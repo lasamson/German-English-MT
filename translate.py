@@ -15,8 +15,8 @@ from utils.trainer import Trainer
 from utils.translator import Translator
 from utils.data_loader import load_dataset
 from utils.utils import HyperParams, load_checkpoint
+from utils.average_models import average_checkpoints
 from models.seq2seq import make_seq2seq_model
-from utils.beam_search import beam_decode, beam_decode_iterative
 
 
 def main(params, greedy, beam_size):
@@ -46,11 +46,18 @@ def main(params, greedy, beam_size):
     # make the Seq2Seq model
     model = make_seq2seq_model(params)
 
-    # load the saved model
-    model_path = os.path.join(
-        args.model_dir + "/checkpoints/", params.model_file)
-    print("Restoring parameters from {}".format(model_path))
-    model = Trainer.load_checkpoint(model, model_path)
+    # load the saved model for evaluation
+    if params.average > 1:
+        print("Averaging the last {} checkpoints".format(params.average))
+        checkpoint = {}
+        checkpoint["state_dict"] = average_checkpoints(
+            args.model_dir, params.average)
+        model = Trainer.load_checkpoint(model, checkpoint)
+    else:
+        model_path = os.path.join(
+            args.model_dir + "checkpoints/", params.model_file)
+        print("Restoring parameters from {}".format(model_path))
+        model = Trainer.load_checkpoint(model, model_path)
 
     # instantiate a Translator object to translate SRC langauge to TRG language using Greedy/Beam Decoding
     decoder = Translator(model, dev_iter, params, device)
@@ -88,7 +95,8 @@ if __name__ == "__main__":
                    help="greedy decoding on outputs")
     p.add_argument("-beam_size", type=int, default=5,
                    help="Beam Search on outputs")
-
+    p.add_argument("-average", type=int, default=0,
+                   help="Average the weight of the last n checkpoints")
     args = p.parse_args()
 
     json_params_path = os.path.join(args.model_dir, "params.json")
@@ -99,5 +107,6 @@ if __name__ == "__main__":
     params.data_path = args.data_path
     params.model_dir = args.model_dir
     params.model_file = args.model_file
+    params.average = args.average
     params.cuda = torch.cuda.is_available()
     main(params, args.greedy, args.beam_size)

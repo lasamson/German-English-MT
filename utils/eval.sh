@@ -9,7 +9,7 @@ echo "Reference File: " $ref_file
 echo "Translated File: " $translated_file
 
 # echo "Reversing BPE..."
-# cat $translated_file | sed -E 's/(\@\@ )|(\@\@ ?$)//g' > $translated_file
+cat  $translated_file | sed -E 's/(\@\@ )|(\@\@ ?$)//g'  > {$translated_file}
 
 REFERENCE_FILE=$ref_file
 TRANSLATED_FILE=$translated_file

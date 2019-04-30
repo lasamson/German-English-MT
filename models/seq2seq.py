@@ -85,13 +85,13 @@ def make_seq2seq_model(params):
                              dropout_p=params.layer_dropout, device=params.device,
                              num_layers=params.n_layers_dec)
     else:
-        encoder = TransformerEncoder(params.embedding_size, params.src_vocab_size, params.hidden_size, params.n_layers_enc,
+        encoder = TransformerEncoder(params.embed_size, params.src_vocab_size, params.hidden_size, params.n_layers_enc,
                                      params.num_heads, params.max_length, d_ff=params.d_ff, input_dropout=params.input_dropout,
                                      layer_dropout=params.layer_dropout, attention_dropout=params.attention_dropout,
                                      relu_dropout=params.relu_dropout)
 
         # create the Transformer Decoder
-        decoder = TransformerDecoder(params.embedding_size, params.tgt_vocab_size, params.hidden_size, params.n_layers_dec,
+        decoder = TransformerDecoder(params.embed_size, params.tgt_vocab_size, params.hidden_size, params.n_layers_dec,
                                      params.num_heads, params.max_length, d_ff=params.d_ff, input_dropout=params.input_dropout,
                                      layer_dropout=params.layer_dropout, attention_dropout=params.attention_dropout,
                                      relu_dropout=params.relu_dropout)

@@ -288,7 +288,9 @@ class Trainer(object):
             is_best: boolean value stating whether the current model got the best val loss
             checkpoint: folder where parameters are to be saved
         """
-        filepath = os.path.join(checkpoint, "last.pth.tar")
+
+        filedir = "epoch_{}.pth.tar".format(state["epoch"])
+        filepath = os.path.join(checkpoint, filedir)
         if not os.path.exists(checkpoint):
             os.mkdir(checkpoint)
         torch.save(state, filepath)
@@ -305,10 +307,22 @@ class Trainer(object):
             checkpoint: filename which needs to be loaded
             optimizer: resume optimizer from checkpoint
         """
-        if not os.path.exists(checkpoint):
-            raise ("File doesn't exist {}".format(checkpoint))
-        checkpoint = torch.load(checkpoint)
+        # if checkpoint is passed a string (model_path)
+        # otherwise it could be passed in as a dictionary
+        # contained averaged checkpoint weights
+        if isinstance(checkpoint, str):
+            if not os.path.exists(checkpoint):
+                raise ("File doesn't exist {}".format(checkpoint))
+            checkpoint = torch.load(checkpoint)
+
+        state_dict = checkpoint["state_dict"]
+
+        # this is for only GRUEncoders/GRUDecoders
+        for key in list(state_dict.keys()):
+            if key.endswith("weight_hh_l0"):
+                del state_dict[key]
         model.load_state_dict(checkpoint["state_dict"])
+
         if optimizer:
             if isinstance(optimizer, ScheduledOptimizer):
                 optimizer._optimizer.load_state_dict(checkpoint["optim_dict"])
