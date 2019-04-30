@@ -46,3 +46,4 @@ data/*
 notebooks/*
 experiments/*
 .vscode/*
+.mypy_cache/*
