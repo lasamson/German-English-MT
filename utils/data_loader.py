@@ -29,8 +29,8 @@ def batch_size_fn(new, count, sofar):
     Keep augmenting batch and calculate the total number of tokens + padding 
     Arguments:
         new: new example to add
-        cuount: current count of examples in the batch
-        sofar: curruent effecctive batch size
+        count: current count of examples in the batch
+        sofar: current effecctive batch size
     """
     global max_src_in_batch, max_tgt_in_batch
     if count == 1:
@@ -86,7 +86,7 @@ def load_dataset(data_path, train_batch_size=4096, dev_batch_size=1, max_len=100
         SRC, TRG), path=data_path, filter_pred=lambda x: len(vars(x)['src']) <= max_len and len(vars(x)['trg']) <= max_len)
     dev_data = datasets.TranslationDataset(
         exts=("dev.de", "dev.en"), fields=(SRC, TRG), path=data_path)
-
+    
     SRC.build_vocab(train_data.src, train_data.trg)
     TRG.build_vocab(train_data.src, train_data.trg)
 

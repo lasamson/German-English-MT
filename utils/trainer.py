@@ -7,6 +7,10 @@ from utils.utils import HyperParams, set_logger, RunningAverage
 from models.transformer.optim import ScheduledOptimizer
 from torch.nn.utils import clip_grad_norm
 from utils.utils import make_tgt_mask
+from utils.data_loader import DataIterator, batch_size_fn
+from collections import defaultdict
+from torchtext.data.example import Example
+from torchtext.data.dataset import Dataset
 import time
 import math
 import os
@@ -40,23 +44,33 @@ class Trainer(object):
         self.max_num_epochs = num_epochs
         self.best_val_loss = float("inf")
 
-    def train_epoch(self):
+    def train_epoch(self, data_iter, boost_percent=.20):
         """
         Train Encoder-Decoder model for one single epoch
         """
         self.model.train()
         total_loss = 0
         n_word_total = 0
+        new_examples = None
+
+        ex_to_perp = defaultdict(float)
 
         with tqdm() as t:
-            for idx, batch in enumerate(self.train_iter):
+            # for idx, batch in enumerate(self.train_iter):
+            for idx, batch in enumerate(data_iter):
                 src, src_lengths = batch.src
                 trg, trg_lengths = batch.trg
+                
+                if self.params.boost:
+                    src_tokens = self.batch_reverse_tokenization(src)
+                    trg_tokens = self.batch_reverse_tokenization(trg)
+                    src_trg_examples = list(zip(src_tokens, trg_tokens))
+
                 # [batch_size, 1, src_seq_len]
                 src_mask = (src != self.params.pad_token).unsqueeze(-2)
                 # [batch_size, trg_seq_len, trg_seq_len]
                 trg_mask = make_tgt_mask(trg, self.params.pad_token)
-
+                print(trg.size())
                 if self.params.cuda:
                     src, trg = src.cuda(), trg.cuda()
 
@@ -64,13 +78,21 @@ class Trainer(object):
                 self.optimizer.zero_grad()
                 output = self.model(src, trg, src_mask,
                                     trg_mask, src_lengths, trg_lengths)
+                
+                trg_batch_size = trg.size(0)
+                trg_seq_len = trg.size(-1)
 
                 output = output[:, :-1, :].contiguous().view(-1,
                                                              self.params.tgt_vocab_size)
                 trg = trg[:, 1:].contiguous().view(-1)
-
+                
                 assert output.size(0) == trg.size(0)
 
+                #TODO: compute perplexity, add to ex_to_perp (if boost==True)
+                if self.params.boost:
+                    perplexity_per_example = [pp.item() for pp in list(self.compute_perplexity_on_batch(output, trg, trg_batch_size, trg_seq_len - 1))]
+                    for i in range(trg_batch_size):
+                        ex_to_perp[src_trg_examples[i]] = perplexity_per_example[i]
                 loss = self.criterion(output, trg)
                 loss.backward()
 
@@ -90,8 +112,21 @@ class Trainer(object):
                 t.update()
                 torch.cuda.empty_cache()
 
+        #TODO: Sort ex_to_perp by value to get list of examples, store top 20% in new_examples
+        sorted_examples = sorted(ex_to_perp.items(), key=lambda kv: kv[1], reverse=True)
+        slice_index = int(boost_percent * len(sorted_examples))
+        new_examples = sorted_examples[:slice_index]
+
         loss_per_word = total_loss/n_word_total
-        return loss_per_word
+        return loss_per_word, new_examples
+
+    def compute_perplexity_on_batch(self, output, target, batch_size, seq_len):
+        """ Return perplexity for each example in the batch """
+        log_likelihood = F.nll_loss(output, target, reduction="none")
+        perplexity = torch.exp(log_likelihood)
+        perplexity = perplexity.view(batch_size, seq_len)
+        avg_perplexity = torch.mean(perplexity, dim=1)
+        return avg_perplexity
 
     def validate(self):
         """
@@ -135,16 +170,71 @@ class Trainer(object):
         loss_per_word = total_loss/n_word_total
         return loss_per_word
 
+
+
+    def batch_reverse_tokenization(self, batch):
+        """
+        Convert a batch of sequences of word IDs to words in a batch
+        Arguments:
+            batch: a tensor containg the decoded examples (with word ids representing the sequence)
+        """
+        sentences = []
+        for example in batch:
+            sentence = []
+            for token_id in example:
+                token_id = int(token_id.item())
+                if token_id == self.params.eos_index:
+                    break
+                sentence.append(self.params.itos[token_id])
+            sentences.append(tuple(sentence[1:]))
+        return sentences
+
     def train(self):
         print("Starting training for {} epoch(s)".format(
             self.max_num_epochs - self.epoch))
+
+
+
+        current_examples = list(self.train_iter.data())
+        if not self.params.boost_warmup:
+            hard_training_instances = []
+        
         for epoch in range(self.max_num_epochs):
             self.epoch = epoch
             print("Epoch {}/{}".format(epoch+1, self.max_num_epochs))
 
             # train the model the train set
             epoch_start_time = time.time()
-            train_loss_avg = self.train_epoch()
+            #TODO: make a copy of train_iter, add new examples to it, and pass it into train_epoch()
+            data_iterator = self.train_iter
+
+
+            if self.params.boost and epoch+1 > self.params.boost_warmup:
+                print("boosting....")
+                example_objs = []
+                for i in range(len(hard_training_instances)):
+                    example = Example()
+                    setattr(example, "src", list(hard_training_instances[i][0][0]))
+                    setattr(example, "trg", list(hard_training_instances[i][0][1]))
+                    example_objs.append(example)
+            
+                # data_iterator = self.train_iter
+                existing_data = self.train_iter.data()
+                existing_data.extend(example_objs)
+                print(len(existing_data))
+
+                new_dataset = Dataset(existing_data, fields=[("src", self.params.SRC), ("trg", self.params.TRG)])
+                print(new_dataset)            
+                data_iterator = DataIterator(new_dataset, batch_size=self.params.train_batch_size, device=self.params.device,
+                                  repeat=False, sort_key=lambda x: (len(x.src), len(x.trg)),
+                                  batch_size_fn=batch_size_fn, train=True, sort_within_batch=True, shuffle=True)
+                print(data_iterator)
+            
+            train_loss_avg, hard_training_instances = self.train_epoch(data_iterator)
+
+
+           #TODO: Create new Example objects for training instanes with higheset perplexity
+
             epoch_end_time = time.time()
             epoch_mins, epoch_secs = self.epoch_time(
                 epoch_start_time, epoch_end_time)

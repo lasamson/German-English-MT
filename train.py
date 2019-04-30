@@ -39,8 +39,11 @@ def main(params):
 
     params.src_vocab_size = de_size
     params.tgt_vocab_size = en_size
-
     params.pad_token = EN.vocab.stoi["<pad>"]
+    params.eos_index = EN.vocab.stoi["</s>"]
+    params.itos = EN.vocab.itos
+    params.SRC = DE
+    params.TRG = EN
 
     device = torch.device('cuda' if params.cuda else 'cpu')
     params.device = device
