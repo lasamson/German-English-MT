@@ -39,7 +39,7 @@ def make_tgt_mask(tgt, tgt_pad):
     Make the mask for the target to hide padding and future words 
 
     Arguments:
-        :tgt: target sequence Tensor batch_size, seq_len]
+        :tgt: target sequence Tensor of shape [batch_size, seq_len]
         tgt_pad: id of the padding token
 
     Returns:

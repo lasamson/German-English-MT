@@ -5,161 +5,72 @@ import torch
 from utils.utils import tile
 import numpy as np
 
-class BeamSearchNode(object):
-    """ 
-    Represents one node in the Beam Search Process 
 
-    Arguments:
-        decoder_hidden: hidden state of the decoder at the current timestep
-        prev_node: parent node of the current Beam Search Node
-        word_id: index of the word
-        log_prob: log probability of partial hypothesis
-        length: length of partial hypothessis
+def beam_search_single(model, encoder_final, encoder_outputs, beam_size, sos_index, eos_index, src_mask, tgt_mask, alpha, device, max_seq_len=100):
     """
+    Perform beam search on a single example to get the most likely translation for a given source sequence
+    """
+    decoder_input = torch.ones(1, 1).fill_(
+        sos_index).type(torch.LongTensor).to(device)
 
-    def __init__(self, decoder_hidden, prev_node, word_id, log_prob, length):
-        self.h = decoder_hidden
-        self.prev_node = prev_node
-        self.word_id = word_id
-        self.log_prob = log_prob
-        self.length = length
+    # decode the <s> input as the first input to the decoder
+    output, decoder_hidden = model.decode(decoder_input, encoder_outputs,
+                                          src_mask, tgt_mask, encoder_final)
 
-    def eval(self, alpha=0.7):
-        # alpha = 1.0
-        lp = ((5 + self.length) / 6) ** alpha
-        return self.log_prob / lp
-        # return self.log_prob / float(self.length - 1 + 1e-6) + alpha
+    prob = F.log_softmax(model.generator(output), dim=-1)
+    vocab_size = prob.size(-1)
 
-    def __lt__(self, other):
-        return -self.eval() < -other.eval()
+    # get the top K words from the output from the decoder
+    topk, indices = torch.topk(prob, beam_size)
+    topk = topk.view(-1)
+    indices = indices.view(-1)
 
+    # len(list) = beam_size
+    tokens_seq = []
+    for i in range(beam_size):
+        tokens_seq.append(
+            [torch.tensor([sos_index]).to(device), indices[i]])
 
-def beam_decode_iterative(model, decoder_hiddens, encoder_outputs, sos_index, eos_index, beam_width, num_sentences, src_mask, tgt_mask, device, max_len=50):
-    decoder_hidden = decoder_hiddens[:, 0, :].unsqueeze(
-        1)  # [num_layers, 1, hidden_size]
-    encoder_output = encoder_outputs[0, :, :].unsqueeze(
-        0)  # [1, seq_len, hidden_size]
+    # [num_layers, beam_size, decoder_hidden_dim]
+    hidden_seq = decoder_hidden.transpose(
+        0, 1).repeat(beam_size, 1, 1).transpose(0, 1)
 
-    # initialize the hidden state for the decoder
-    hidden = None
+    # logprob_seq = [beam_size]
+    logprob_seq = topk
 
-    # input token to the beam search process
-    decoder_input = torch.LongTensor([sos_index]).unsqueeze(1).to(device)
+    # [beam_width, seq_len, 2 * encoder_hidden_dim]
+    encoder_outputs = encoder_outputs.squeeze(0).repeat(beam_size, 1, 1)
 
-    # num sentences to generate before terminating
-    full_sentences = []
-
-    # make queue
-    queue = PriorityQueue()
-
-    # decode <s>
-    pre_output, hidden = model.decoder(
-        decoder_input, encoder_output, src_mask, tgt_mask, decoder_hidden, hidden)
-    prob = model.generator(pre_output[:, -1])
-    predictions = F.log_softmax(prob, dim=-1)
-
-    initial_node = BeamSearchNode(None, None, decoder_input, 0, 1)
-
-    log_prob, indexes = torch.topk(predictions, beam_width)
-    log_prob = log_prob.view(-1)
-    indexes = indexes.view(-1)
-
-    next_nodes = []
-    for k in range(beam_width):
-        decoded_word = indexes[k].view(-1)
-        log_p = log_prob[k].item()
-
-        node = BeamSearchNode(hidden, initial_node, decoded_word,
-                              initial_node.log_prob + log_p, initial_node.length + 1)
-        score = -node.eval()
-        next_nodes.append((score, node))
-
-    for elem in next_nodes:
-        queue.put(elem)
-
-    sent_length = 1
     while True:
+        if indices[0].item() == eos_index or len(tokens_seq[0]) == max_seq_len:
+            return torch.tensor([j.item() for j in tokens_seq[0]])[1:]
 
-        # only decode upto sentences of size `max_len`
-        if sent_length >= max_len:
-            break
+        # evaluate the k beams using the decoder
+        output, decoder_hidden = model.decode(indices.unsqueeze(1), encoder_outputs,
+                                              src_mask, tgt_mask, encoder_final, hidden_seq.contiguous())
 
-        score_to_node = {}
-        for _ in range(beam_width):
-            score, n = queue.get()
-            decoder_input = n.word_id
-            decoder_hidden = n.h
+        # [beam_size, 1, vocab_size]
+        prob = F.log_softmax(model.generator(output), dim=-1)
 
-            if n.word_id.item() == eos_index and n.prev_node != None:  # EOS check
-                full_sentences.append((score, n))
-                if(len(full_sentences) >= num_sentences):  # if we have enough complete sentences
-                    break
-                else:
-                    continue
+        # [beam_size, 1, vocab_size]
+        prob += logprob_seq.unsqueeze(1).unsqueeze(1)
 
-            # decode for one step
-            decoder_input = decoder_input.unsqueeze(1)
-            pre_output, hidden = model.decoder(
-                decoder_input, encoder_output, src_mask, tgt_mask, decoder_hidden, hidden)
-            prob = model.generator(pre_output[:, -1])
-            predictions = F.log_softmax(prob, dim=-1)
+        prob = prob.flatten()
+        logprob_seq, indices = torch.topk(prob, beam_size)
+        logprob_seq = logprob_seq.view(-1)
+        indices = indices.view(-1)
 
-            # generate predictions
-            predictions = F.log_softmax(predictions, dim=1)
+        # which beams were choosen as the top k
+        beam_chosen = indices // vocab_size
+        indices = indices % vocab_size
 
-            # choose the top K scoring predictions
-            log_prob, indexes = torch.topk(predictions, beam_width)
-            log_prob = log_prob.view(-1)
-            indexes = indexes.view(-1)
-
-            # next_nodes = []
-
-            for k in range(beam_width):
-                decoded_word = indexes[k].view(-1)
-                log_p = log_prob[k].item()
-
-                node = BeamSearchNode(
-                    decoder_hidden, n, decoded_word, n.log_prob + log_p, n.length + 1)
-                score = -node.eval()
-                # next_nodes.append((score, node))
-                score_to_node[score] = node
-
-        # for elem in next_nodes:
-        #     queue.put(elem)
-        if(len(full_sentences) >= num_sentences):  # if we have enough complete sentences
-            print('Full sentences reached')
-            break
-
-        ct = 0
-        # print('-----')
-        for key in sorted(score_to_node):
-            # print(key)
-            if ct >= beam_width:
-                break
-            queue.put((key, score_to_node[key]))
-            ct += 1
-
-        # qsize += len(next_nodes) - 1
-        sent_length += 1
-
-    # if beam search blows up and no full translation are found
-    # take the top `num_sentenes` from the priority queue
-    if len(full_sentences) == 0:
-        full_sentences = [queue.get() for _ in range(num_sentences)]
-
-    full_sentences_sorted = sorted(full_sentences, key=itemgetter(0))
-    translation_path = full_sentences_sorted[0][1].prev_node
-    utterence = []
-    utterence.append(translation_path.word_id)
-
-    while(translation_path.prev_node != None):
-        translation_path = translation_path.prev_node
-        utterence.append(translation_path.word_id)
-
-    utterence = utterence[::-1]
-    utterence = utterence[1:]
-
-    return torch.tensor(utterence).view(1, -1)
+        temp_seq = []
+        for i in range(beam_size):
+            seq = tokens_seq[beam_chosen[i].item()][:]
+            seq.append(indices[i])
+            temp_seq.append(seq)
+            hidden_seq[:, i, :] = decoder_hidden[:, beam_chosen[i].item(), :]
+        tokens_seq = temp_seq
 
 
 def beam_search(model, encoder_hidden, encoder_output, sos_index, eos_index, pad_index,
@@ -174,7 +85,7 @@ def beam_search(model, encoder_hidden, encoder_output, sos_index, eos_index, pad
     # initialize the hidden state of the decoder
     hidden = model.decoder.init_hidden(encoder_hidden)
 
-    # tile the hidden decoder states and encoder output `beam_size` times
+   # tile the hidden decoder states and encoder output `beam_size` times
     hidden = tile(hidden, beam_width, dim=1)  # [num_layers, K, hidden_size]
 
     # encoder_output => [batch_size, seq_len, hidden_size]
@@ -344,103 +255,3 @@ def beam_search(model, encoder_hidden, encoder_output, sos_index, eos_index, pad
 
     # TODO also return attention scores and probabilities
     return torch.from_numpy(final_outputs)
-
-
-def beam_decode(model, decoder_hiddens, encoder_outputs, sos_index, eos_index, beam_width, num_sentences, src_mask, tgt_mask, device):
-    """
-    Perform Beam Search (translation) on a single src sequence 
-    Arguments:
-        decoder: decoder of the seq2seq model
-        decoder_hiddens: initial hidden state of the decoder [num_layers, batch_size, hidden_size]
-        encoder_outputs: encoder outputs for a single sequence [batch_size, seq_len, hidden_size]
-        sos_index: start of sequence index
-        eos_index: end of sequence index
-        beam_width: size of beam
-        num_sentences: max number of translations for given src sequence
-        src_mask: mask on the src sequence [batch_size, seq_len]
-        device: torch device
-
-    Returns:
-        A tensor with word indicies containing the translation output from beam search
-    """
-
-    decoder_hidden = decoder_hiddens[:, 0, :].unsqueeze(1)
-    encoder_output = encoder_outputs[0, :, :].unsqueeze(0)
-
-    # input token to the beam search process
-    decoder_input = torch.LongTensor([sos_index]).unsqueeze(1).to(device)
-
-    # num sentences to generate before terminating
-    full_sentences = []
-
-    hidden = None
-    node = BeamSearchNode(hidden, None, decoder_input, 0, 1)
-    queue = PriorityQueue()
-
-    queue.put((-node.eval(), node))
-    qsize = 1
-
-    while True:
-        if qsize > 2000:
-            print('Q full')
-            break
-
-        score, n = queue.get()
-        decoder_input = n.word_id
-        decoder_hidden = n.h
-
-        if n.word_id.item() == eos_index and n.prev_node != None:  # EOS check
-            full_sentences.append((score, n))
-            if(len(full_sentences) >= num_sentences):  # if we have enough complete sentences
-                # print('Full sentences reached')
-                break
-            else:
-                continue
-
-        # decode for one step
-        pre_output, hidden = model.decoder(
-            decoder_input, encoder_output, src_mask, tgt_mask, decoder_hidden, hidden)
-        prob = model.generator(pre_output[:, -1])
-
-        # generate predictions
-        predictions = F.log_softmax(prob, dim=1)
-
-        # choose the top K scoring predictions
-        log_prob, indexes = torch.topk(predictions, beam_width)
-        log_prob = log_prob.view(-1)
-        indexes = indexes.view(-1)
-
-        next_nodes = []
-
-        for k in range(beam_width):
-            decoded_word = indexes[k].view(-1)
-            log_p = log_prob[k].item()
-
-            node = BeamSearchNode(
-                decoder_hidden, n, decoded_word, n.log_prob + log_p, n.length + 1)
-            score = -node.eval()
-            next_nodes.append((score, node))
-
-        for elem in next_nodes:
-            queue.put(elem)
-
-        qsize += len(next_nodes) - 1
-
-    # if beam search blows up and no full translation are found
-    # take the top `num_sentenes` from the priority queue
-    if len(full_sentences) == 0:
-        full_sentences = [queue.get() for _ in range(num_sentences)]
-
-    full_sentences_sorted = sorted(full_sentences, key=itemgetter(0))
-    translation_path = full_sentences_sorted[0][1].prev_node
-    utterence = []
-    utterence.append(translation_path.word_id)
-
-    while(translation_path.prev_node != None):
-        translation_path = translation_path.prev_node
-        utterence.append(translation_path.word_id)
-
-    utterence = utterence[::-1]
-    utterence = utterence[1:]
-
-    return torch.tensor(utterence).view(1, -1)

@@ -1,7 +1,7 @@
 import torch
 from torch.autograd import Variable
 import torch.nn.functional as F
-from utils.beam_search import beam_search
+from utils.beam_search import beam_search, beam_search_single
 from tqdm import tqdm
 import logging
 import numpy as np
@@ -12,6 +12,12 @@ import os
 class Translator(object):
     """
     Translator class that handles Greedy Decoding and Beam Search inorder to obtain translations from the model
+
+    Arguments:  
+        model: the trained model to peform decoding on 
+        dev_iter: Iterator for the Dev data 
+        params: params related to the `model`
+        device: CPU/GPU device number
     """
 
     def __init__(self, model, dev_iter, params, device):
@@ -32,11 +38,7 @@ class Translator(object):
             with torch.no_grad():
                 for idx, batch in enumerate(self.dev_iter):
                     src, src_lengths = batch.src
-                    trg, trg_lengths = batch.trg
                     src_mask = (src != self.params.pad_token).unsqueeze(-2)
-
-                    # [batch_size, trg_seq_len, trg_seq_len]
-                    trg_mask = make_tgt_mask(trg, self.params.pad_token)
 
                     if self.params.cuda:
                         src = src.cuda()
@@ -45,25 +47,35 @@ class Translator(object):
                     encoder_output, encoder_final = self.model.encode(
                         src, src_mask, src_lengths)
 
-                    if self.params.model_type == "GRU":
-                        encoder_final = encoder_final[:self.model.decoder.num_layers]
-                    else:
-                        encoder_final = None
+                    # TODO: Greedy Decoding for GRU and Transformers are different
+                    # the GRU greedy decoding just takes in the previous token
+                    # whereas the Transformer model takes in the whole sequence
+                    # that has been decoded sofar
 
-                        # (batch_size,1) ==> filled with <s> tokens initially
-                    decoder_input = torch.LongTensor([[self.params.sos_index] for _ in range(
-                        src.size(0))]).to(self.device)  # (batch_size,1)
+                    # Encoder Final is the final hidden state of the Encoder Model
+                    # You will only have the Encoder Final if you are using a
+                    # GRUEncoder and if you are using a Transformer then
+                    # the encoder_final will be None
+                    # [num_layers, batch_size, hidden_size]
+                    encoder_final = encoder_final[:self.model.decoder.num_layers] if self.params.model_type == "GRU" else None
 
-                    # hold the translated sentences
-                    # [batch_size, seq_len]
-                    decoded_batch = torch.zeros((src.size(0), max_len))
+                    decoded_batch = torch.ones(1, 1).fill_(
+                        self.params.sos_index).type_as(src)
 
                     hidden = None
-                    for i in range(max_len):
+                    for _ in range(max_len-1):
+                        # either use the decoded batch to decode the next word
+                        # or use the last word decoded to decode the next work
+                        trg = decoded_batch[:, -1].unsqueeze(
+                            1) if self.params.model_type == "GRU" else decoded_batch
 
-                        # predictions: [batch_size, 1, hidden_size], hidden: [num_layers, batch_size, hidden_size]
-                        pre_output, hidden = self.model.decoder(
-                            decoder_input, encoder_output, src_mask, trg_mask, encoder_final, hidden)
+                        # create trgt_mask for transformer [batch_size, seq_len, seq_len]
+                        trg_mask = make_tgt_mask(
+                            trg, tgt_pad=self.params.pad_token)
+
+                        # pre_output: [batch_size, seq_len, hidden_size], hidden: [num_layers, batch_size, hidden_size]
+                        pre_output, hidden = self.model.decode(
+                            trg, encoder_output, src_mask, trg_mask, encoder_final, hidden)
 
                         # pass the pre_output through the generator to get prediction
                         # pre_ouput[:, -1] => [batch_size, hidden_size]
@@ -73,12 +85,13 @@ class Translator(object):
                         prob = F.log_softmax(prob, dim=-1)
 
                         # [batch_size, 1]
-                        next_word = torch.argmax(prob, dim=-1).unsqueeze(1)
+                        next_word = torch.argmax(prob, dim=-1).item()
 
-                        decoded_batch[:, i] = next_word
+                        decoded_batch = torch.cat([decoded_batch,
+                                                   torch.ones(1, 1).type_as(src.data).fill_(next_word)], dim=1)
 
-                        decoder_input = next_word
-
+                    # the decoded batch should not include the <s> token
+                    decoded_batch = decoded_batch[:, 1:]
                     tokens = self.batch_reverse_tokenization(decoded_batch)
                     decoded_sentences.extend(tokens)
                     t.update()
@@ -99,40 +112,39 @@ class Translator(object):
                     # if (index + 1) % 20 == 0:
                         # break
                     src, src_lengths = batch.src
-                    trg, trg_lengths = batch.trg
                     src_mask = (src != self.params.pad_token).unsqueeze(-2)
-                    # [batch_size, trg_seq_len, trg_seq_len]
-                    trg_mask = make_tgt_mask(trg, self.params.pad_token)
 
                     if self.params.cuda:
                         src = src.cuda()
 
                     # run the src langauge through the Encoder
-                    # output => [batch_size, seq_len, hidden_size], hidden => [num_layers, batch_size, hidden_size]
+                    # output => [batch_size, seq_len, hidden_size],
+                    # hidden => [num_layers, batch_size, hidden_size]
                     encoder_output, encoder_final = self.model.encode(
                         src, src_mask, src_lengths)
 
-                    if self.params.model_type == "GRU":
-                        encoder_final = encoder_final[:self.model.decoder.num_layers]
-                    else:
-                        encoder_final = None
+                    encoder_final = encoder_final[:self.model.decoder.num_layers] if self.params.model_type == "GRU" else None
 
                     # output: [batch_size, seq_len, hidden_size], hidden: [num_layers, batch_size, hidden_size]
                     # translations = beam_decode_iterative(self.model, encoder_final, encoder_output, self.params.sos_index, self.params.eos_index, beam_width, num_sentences, src_mask, trg_mask, self.device)
                     # translations = beam_decode(self.model.decoder, hidden, output, self.params.sos_index, self.params.eos_index, beam_width, num_sentences, src_mask, self.device)
 
+                    trg_mask = None
+
+                    translation = beam_search_single(self.model, encoder_final, encoder_output, beam_width,
+                                                     self.params.sos_index, self.params.eos_index, src_mask, trg_mask, 1.0, self.device)
+
                     # run beam search to get translations
-                    translations = beam_search(model=self.model, encoder_hidden=encoder_final, encoder_output=encoder_output,
-                                               sos_index=self.params.sos_index, eos_index=self.params.eos_index,
-                                               pad_index=self.params.pad_token, beam_width=beam_width,
-                                               src_mask=src_mask, tgt_mask=trg_mask,
-                                               alpha=1, device=self.device, max_len=50)
+                    # translations = beam_search(model=self.model, encoder_hidden=encoder_final, encoder_output=encoder_output,
+                    #                            sos_index=self.params.sos_index, eos_index=self.params.eos_index,
+                    #                            pad_index=self.params.pad_token, beam_width=beam_width,
+                    #                            src_mask=src_mask, tgt_mask=trg_mask,
+                    #                            alpha=1, device=self.device, max_len=50)
 
                     # convert tensor of word indicies to words
-                    tokens = self.batch_reverse_tokenization(translations)
-
+                    tokens = self.batch_reverse_tokenization(
+                        translation.view(1, -1))
                     decoded_sentences.extend(tokens)
-
                     t.update()
         return decoded_sentences
 

@@ -38,5 +38,3 @@ echo "monolingual data preprocessed..."
 echo "generating translations..."
 fairseq-generate $monolingual --path $pretrained_model --batch-size 128 --beam 1 --target-lang de
 echo "translations generated..."
-
-

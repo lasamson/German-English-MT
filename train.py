@@ -55,12 +55,12 @@ def main(params):
         criterion = LabelSmoothingLoss(
             params.label_smoothing, params.tgt_vocab_size, params.pad_token).to(device)
         optimizer = ScheduledOptimizer(optimizer=optimizer, d_model=params.hidden_size,
-                                       init_lr=params.lr, n_warmup_steps=params.n_warmup_steps)
+                                       factor=2, n_warmup_steps=params.n_warmup_steps)
         scheduler = None
     else:
         criterion = nn.NLLLoss(reduction="sum", ignore_index=params.pad_token)
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, patience=2, factor=.1, verbose=True)
+            optimizer, patience=3, factor=.1, verbose=True)
 
     # intialize the Trainer
     trainer = Trainer(model, optimizer, scheduler, criterion,
@@ -85,10 +85,6 @@ if __name__ == "__main__":
     p.add_argument("-restore_file", default=None, help="Name of the file in the model directory containing weights \
                    to reload before training")
     args = p.parse_args()
-
-    # create an experiments folder for training the seq2seq model
-    if not os.path.exists("./experiments/seq2seq/"):
-        os.mkdir("./experiments/seq2seq/")
 
     # Set the logger
     set_logger(os.path.join(args.model_dir, "train.log"))
