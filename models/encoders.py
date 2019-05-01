@@ -40,6 +40,8 @@ class GRUEncoder(nn.Module):
 
         # need to split the Encoder into seperate layers inroder to apply
         # Weight Dropout and Variational Dropout
+        # Note: since this Encoder is bidirectional, the input to the layers > 1
+        # are going to be 2 x hidden_size, since the directions are concatenated and not summed
         self.gru_list = [WeightDrop(nn.GRU(input_size=self.embed_size if num_layer == 0 else 2*self.hidden_size,
                                            hidden_size=hidden_size, bidirectional=True, batch_first=True, num_layers=1))
                          for num_layer in range(self.num_layers)]

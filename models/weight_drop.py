@@ -7,7 +7,7 @@ class WeightDrop(nn.Module):
     Apply dropout to the recurrent matrix (weight_hh_l0) of the GRU
     This requires a "hack" in order to work
     Arguments:
-        rnn: RNN Network to apply weight drop (eg. GRU)
+        rnn: RNN Network (eg. GRU/LSTM) to apply weight drop (eg. GRU)
         dropout: dropout probability to apply to the GRU
     """
 
