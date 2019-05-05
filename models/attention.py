@@ -1,4 +1,3 @@
-
 import random
 import torch
 from torch import nn
@@ -33,7 +32,9 @@ class ScaledDotProductAttention(nn.Module):
         # query: [batch_size, num_heads, seq_len, d_k]
         # keys: [batch_size, num_heads, seq_len, d_k]
         # [batch_size, num_heads, seq_len, d_k] * [batch_size, num_heads, d_k, seq_len] => [batch_size, num_heads, seq_len, seq_len]
-        scores = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(d_k)
+        # for each you have a seq_lne * seq_len unnormalized attention score matrix
+        key = key.transpose(-2, -1)
+        scores = torch.matmul(query, key) / math.sqrt(d_k)
 
         # apply mask to scores if given
         if mask is not None:

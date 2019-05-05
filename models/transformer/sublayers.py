@@ -1,5 +1,4 @@
 """ Implementation of the different sublayers in the Transformer Model """
-
 import torch
 from torch import nn
 import torch.nn.functional as F
