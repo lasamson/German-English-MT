@@ -3,6 +3,7 @@ from torch import nn, optim
 from tqdm import tqdm
 from torch.nn import functional as F
 from torch.autograd import Variable
+from torch.utils.tensorboard import SummaryWriter
 from utils.utils import HyperParams, set_logger, RunningAverage
 from models.transformer.optim import ScheduledOptimizer
 from torch.nn.utils import clip_grad_norm
@@ -11,6 +12,7 @@ from utils.data_loader import DataIterator, batch_size_fn
 from collections import defaultdict
 from torchtext.data.example import Example
 from torchtext.data.dataset import Dataset
+from utils.translator import Translator
 import time
 import math
 import os
@@ -19,7 +21,7 @@ import shutil
 
 class Trainer(object):
     """
-    Class to handle the training of Encoder-Decoder Architectures 
+    Class to handle the training of Encoder-Decoder Architectures
 
     Arguments:
         model: Seq2Seq `model`
@@ -32,7 +34,7 @@ class Trainer(object):
         params: hyperparams for `model`
     """
 
-    def __init__(self, model, optimizer, scheduler, criterion, num_epochs, train_iter, dev_iter, params):
+    def __init__(self, model, optimizer, scheduler, criterion, train_iter, dev_iter, params):
         self.model = model
         self.optimizer = optimizer
         self.scheduler = scheduler
@@ -41,8 +43,10 @@ class Trainer(object):
         self.dev_iter = dev_iter
         self.params = params
         self.epoch = 0
-        self.max_num_epochs = num_epochs
+        self.iterations = 0
+        self.max_num_epochs = params.epochs
         self.best_val_loss = float("inf")
+        self.summary_writer = SummaryWriter(params.model_dir + "runs")
 
     def train_epoch(self, data_iter):
         """
@@ -60,7 +64,7 @@ class Trainer(object):
             for idx, batch in enumerate(data_iter):
                 src, src_lengths = batch.src
                 trg, trg_lengths = batch.trg
-                
+
                 if self.params.boost:
                     src_tokens = self.batch_reverse_tokenization(src)
                     trg_tokens = self.batch_reverse_tokenization(trg)
@@ -77,22 +81,25 @@ class Trainer(object):
                 self.optimizer.zero_grad()
                 output = self.model(src, trg, src_mask,
                                     trg_mask, src_lengths, trg_lengths)
-                
+
                 trg_batch_size = trg.size(0)
                 trg_seq_len = trg.size(-1)
 
                 output = output[:, :-1, :].contiguous().view(-1,
                                                              self.params.tgt_vocab_size)
                 trg = trg[:, 1:].contiguous().view(-1)
-                
+
                 assert output.size(0) == trg.size(0)
 
-                # Compute perplexity, update ex_to_perp for corresponding 
+                # Compute perplexity per example, update ex_to_perp for corresponding
                 # (src,trg) pairs (if boost==True)
                 if self.params.boost:
-                    perplexity_per_example = [pp.item() for pp in list(self.compute_perplexity_on_batch(output, trg, trg_batch_size, trg_seq_len - 1))]
+                    perplexity_per_example = [pp.item() for pp in list(
+                        self.compute_perplexity_on_batch(output, trg, trg_batch_size, trg_seq_len - 1))]
                     for i in range(trg_batch_size):
-                        ex_to_perp[src_trg_examples[i]] = perplexity_per_example[i]
+                        ex_to_perp[src_trg_examples[i]
+                                   ] = perplexity_per_example[i]
+
                 loss = self.criterion(output, trg)
                 loss.backward()
 
@@ -103,18 +110,25 @@ class Trainer(object):
                     self.optimizer.step()
 
                 # update the average loss
-                total_loss += loss.item()
+                batch_loss = loss.item()
+                total_loss += batch_loss
                 non_pad_mask = trg.ne(self.params.pad_token)
                 n_word = non_pad_mask.sum().item()
                 n_word_total += n_word
 
-                t.set_postfix(loss='{:05.3f}'.format(loss/n_word))
+                t.set_postfix(loss='{:05.3f}'.format(batch_loss/n_word))
                 t.update()
                 torch.cuda.empty_cache()
+                self.iterations += 1
+                self.summary_writer.add_scalar(
+                    'train/loss_per_iteration', batch_loss/n_word, self.iterations)
+                self.summary_writer.add_scalar(
+                    'train/perplexity_per_iteration', math.exp(batch_loss/n_word), self.iterations)
 
-        # Sort ex_to_perp by value to get list of examples, store top 20% in new_examples
+        #  Sort ex_to_perp by value to get list of examples, store top 20% in new_examples
         if self.params.boost:
-            sorted_examples = sorted(ex_to_perp.items(), key=lambda kv: kv[1], reverse=True)
+            sorted_examples = sorted(
+                ex_to_perp.items(), key=lambda kv: kv[1], reverse=True)
             slice_index = int(self.params.boost_percent * len(sorted_examples))
             new_examples = sorted_examples[:slice_index]
 
@@ -171,8 +185,6 @@ class Trainer(object):
         loss_per_word = total_loss/n_word_total
         return loss_per_word
 
-
-
     def batch_reverse_tokenization(self, batch):
         """
         Convert a batch of sequences of word IDs to words in a batch
@@ -191,13 +203,15 @@ class Trainer(object):
         return sentences
 
     def train(self):
+        """ Main training method for the Trainer class """
+
         print("Starting training for {} epoch(s)".format(
             self.max_num_epochs - self.epoch))
 
         current_examples = list(self.train_iter.data())
         if not self.params.boost_warmup:
             hard_training_instances = []
-        
+
         for epoch in range(self.max_num_epochs):
             self.epoch = epoch
             print("Epoch {}/{}".format(epoch+1, self.max_num_epochs))
@@ -205,7 +219,7 @@ class Trainer(object):
             # train the model the train set
             epoch_start_time = time.time()
 
-            # Make a copy of train_iter, add new examples to it (if boost==True), 
+            # Make a copy of train_iter, add new examples to it (if boost==True),
             # and pass it into train_epoch()
             data_iterator = self.train_iter
 
@@ -216,20 +230,30 @@ class Trainer(object):
                 for i in range(len(hard_training_instances)):
                     # Create new Example objects for training instanes with higheset perplexity
                     example = Example()
-                    setattr(example, "src", list(hard_training_instances[i][0][0]))
-                    setattr(example, "trg", list(hard_training_instances[i][0][1]))
+                    setattr(example, "src", list(
+                        hard_training_instances[i][0][0]))
+                    setattr(example, "trg", list(
+                        hard_training_instances[i][0][1]))
                     example_objs.append(example)
-            
+
                 existing_data = self.train_iter.data()
                 existing_data.extend(example_objs)
 
                 # Create new Dataset and iterator on the boosted data
-                new_dataset = Dataset(existing_data, fields=[("src", self.params.SRC), ("trg", self.params.TRG)])
+                new_dataset = Dataset(existing_data, fields=[
+                                      ("src", self.params.SRC), ("trg", self.params.TRG)])
                 data_iterator = DataIterator(new_dataset, batch_size=self.params.train_batch_size, device=self.params.device,
-                                  repeat=False, sort_key=lambda x: (len(x.src), len(x.trg)),
-                                  batch_size_fn=batch_size_fn, train=True, sort_within_batch=True, shuffle=True)
-            
-            train_loss_avg, hard_training_instances = self.train_epoch(data_iterator)
+                                             repeat=False, sort_key=lambda x: (len(x.src), len(x.trg)),
+                                             batch_size_fn=batch_size_fn, train=True, sort_within_batch=True, shuffle=True)
+
+            train_loss_avg, hard_training_instances = self.train_epoch(
+                data_iterator)
+
+            # write epoch statistics to Tensorboard
+            self.summary_writer.add_scalar(
+                "train/avg_loss_per_epoch", train_loss_avg, self.epoch)
+            self.summary_writer.add_scalar(
+                "train/avg_perplexity_epoch", math.exp(train_loss_avg), self.epoch)
 
             epoch_end_time = time.time()
             epoch_mins, epoch_secs = self.epoch_time(
@@ -242,6 +266,18 @@ class Trainer(object):
             val_loss_avg = self.validate()
             val_end_time = time.time()
             val_mins, val_secs = self.epoch_time(val_start_time, val_end_time)
+
+            # write validation statistics to Tensorboard
+            self.summary_writer.add_scalar(
+                "val/loss", val_loss_avg, self.epoch)
+            self.summary_writer.add_scalar(
+                "val/perplexity", math.exp(val_loss_avg), self.epoch)
+
+            # every 5 epochs, write out translations using Greedy Decoding
+            # to Tensorboard
+            if (self.epoch + 1) % 5 == 0:
+                decoder = Translator(
+                    self.model, self.dev_iter, self.params, self.params.device)
 
             print(
                 f'Avg Val Loss: {val_loss_avg} | Val Perplexity: {math.exp(val_loss_avg)} | Time: {val_mins}m {val_secs}s')
@@ -256,6 +292,7 @@ class Trainer(object):
             optim_dict = self.optimizer._optimizer.state_dict() if isinstance(
                 self.optimizer, ScheduledOptimizer) else self.optimizer.state_dict()
 
+            continue
             # save checkpoint
             self.save_checkpoint({
                 "epoch": epoch+1,
@@ -305,7 +342,7 @@ class Trainer(object):
         """
         # if checkpoint is passed a string (model_path)
         # otherwise it could be passed in as a dictionary
-        # contained averaged checkpoint weights
+        # containing averaged checkpoint weights
         if isinstance(checkpoint, str):
             if not os.path.exists(checkpoint):
                 raise ("File doesn't exist {}".format(checkpoint))
