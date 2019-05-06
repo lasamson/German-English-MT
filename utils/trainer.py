@@ -13,6 +13,7 @@ from collections import defaultdict
 from torchtext.data.example import Example
 from torchtext.data.dataset import Dataset
 from utils.translator import Translator
+from typing import List
 import time
 import math
 import os
@@ -49,8 +50,17 @@ class Trainer(object):
         self.summary_writer = SummaryWriter(params.model_dir + "runs")
         self.decode_every_num_epochs = 3
 
-    def train_epoch(self, data_iter):
-        """ Train Encoder-Decoder model for one single epoch """
+    def train_epoch(self, data_iter: DataIterator) -> (float, list):
+        """ 
+        Train Encoder-Decoder model for one single epoch 
+
+        Arguments:
+            - data_iter: The Data Iterator 
+
+        Returns:
+            - loss per word
+            - hard training examples according to perplexity (only used in Boosting)
+        """
         self.model.train()
         total_loss = 0
         n_word_total = 0
@@ -78,6 +88,7 @@ class Trainer(object):
 
                 # run the data through the model
                 self.optimizer.zero_grad()
+
                 output = self.model(src, trg, src_mask,
                                     trg_mask, src_lengths, trg_lengths)
 
@@ -133,16 +144,36 @@ class Trainer(object):
         loss_per_word = total_loss/n_word_total
         return loss_per_word, hard_examples
 
-    def get_hardest_examples(self, example_to_perplexity, boost_percent):
-        """ Get the hardest examples in the batch according to perplexity """
+    def get_hardest_examples(self, example_to_perplexity: dict, boost_percent: float) -> list:
+        """ 
+        Get the hardest examples in the batch according to perplexity 
+
+        Arguments:
+            example_to_perplexity: dict containing the perplexity for each example in the training set 
+            boost_percent: percentage of hard instances to boost
+
+        Returns:
+            List of hard training instances
+        """
         sorted_examples = sorted(
             example_to_perplexity.items(), key=lambda kv: kv[1], reverse=True)
         slice_index = int(boost_percent * len(sorted_examples))
         new_examples = sorted_examples[:slice_index]
         return new_examples
 
-    def compute_perplexity_on_batch(self, output, target, batch_size, seq_len):
-        """ Return the perplexity for each example in the batch """
+    def compute_perplexity_on_batch(self, output: torch.Tensor, target: torch.Tensor, batch_size: int, seq_len: int) -> list:
+        """ 
+        Return the perplexity for each example in the batch 
+
+        Arguments:
+            output: Tensor containing the output of the model [batch_size * seq_len, vocab_size] 
+            target: Tensor containing the targets [batch_size * seq_len]
+            batch_size: size the training data batch
+            seq_len: sequence length
+
+        Returns:
+            A list of perplexities for each training example in the batch
+        """
         log_likelihood = F.nll_loss(output, target, reduction="none")
         perplexity = torch.exp(log_likelihood)
         perplexity = perplexity.view(batch_size, seq_len)
@@ -191,7 +222,7 @@ class Trainer(object):
         loss_per_word = total_loss/n_word_total
         return loss_per_word
 
-    def batch_reverse_tokenization(self, batch):
+    def batch_reverse_tokenization(self, batch: torch.Tensor) -> list:
         """
         Convert a batch of sequences of word IDs to words in a batch
 
@@ -212,7 +243,7 @@ class Trainer(object):
             sentences.append(tuple(sentence[1:]))
         return sentences
 
-    def create_example_objs(self, hard_training_instances):
+    def create_example_objs(self, hard_training_instances: list) -> list:
         """ 
         Create `Example` objects from the list of hard training instances
         This method will return a list of `Example` objects that will 
@@ -234,7 +265,7 @@ class Trainer(object):
 
         return example_objs
 
-    def create_boosted_dataset(self, new_training_data):
+    def create_boosted_dataset(self, new_training_data: list) -> DataIterator:
         """ 
         Create a new Dataset and DataIterator with the new hard training instances 
 
@@ -321,6 +352,7 @@ class Trainer(object):
             # every `decode_every_num_epochs` epochs, write out translations using Greedy Decoding
             # to Tensorboard
             if (self.epoch + 1) % self.decode_every_num_epochs == 0:
+                print("Performing Greedy Decoding...")
                 num_translations = 5
                 dev_iter = copy.copy(self.dev_iter)
                 decoder = Translator(model=self.model, dev_iter=list(dev_iter)[:num_translations],
@@ -357,14 +389,23 @@ class Trainer(object):
                 print("- Found new lowest loss!")
                 self.best_val_loss = val_loss_avg
 
-    def epoch_time(self, start_time, end_time):
-        """ Calculate the time to train a `model` on a single epoch """
+    def epoch_time(self, start_time: float, end_time: float) -> (float, float):
+        """ 
+        Calculate the time to train a `model` on a single epoch 
+
+        Arguments:
+            - start_time: the Start time 
+            - end_time: the End time
+
+        Returns: 
+            The elapsed between start and end, given in minutes and seconds
+        """
         elapsed_time = end_time - start_time
         elapsed_mins = int(elapsed_time / 60)
         elapsed_secs = int(elapsed_time - (elapsed_mins * 60))
         return elapsed_mins, elapsed_secs
 
-    def save_checkpoint(self, state, is_best, checkpoint):
+    def save_checkpoint(self, state: dict, is_best: bool, checkpoint: str):
         """
         Save a checkpoint of the model
 
