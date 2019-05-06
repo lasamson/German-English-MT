@@ -326,10 +326,11 @@ class Trainer(object):
                 decoder = Translator(model=self.model, dev_iter=list(dev_iter)[:num_translations],
                                      params=self.params, device=self.params.device)
                 translations = decoder.greedy_decode(max_len=100)
-                translation = [" ".join(translation)
-                               for translation in translations]
-                self.summary_writer.add_text(
-                    "transformer/translation", " \n".join(translation), self.epoch)
+                translations = [" ".join(translation)
+                                for translation in translations]
+                for translation in translations:
+                    self.summary_writer.add_text(
+                        "transformer/translation", translation, self.epoch)
 
             print(
                 f'Avg Val Loss: {val_loss_avg} | Val Perplexity: {math.exp(val_loss_avg)} | Time: {val_mins}m {val_secs}s')
