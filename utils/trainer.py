@@ -17,6 +17,7 @@ import time
 import math
 import os
 import shutil
+import copy
 
 
 class Trainer(object):
@@ -24,14 +25,13 @@ class Trainer(object):
     Class to handle the training of Encoder-Decoder Architectures
 
     Arguments:
-        model: Seq2Seq `model`
+        model: Seq2Seq `model` 
         optimizer: pytorch optimizer
         scheduler: pytorch learning rate scheduler
         criterion: loss function (LabelSmoothingLoss, Negative Log Likelihood)
-        num_epochs: number of epochs to train `model`
         train_iter: training data iterator
         dev_iter: dev data iterator
-        params: hyperparams for `model`
+        params: hyperparams for training of the `model`
     """
 
     def __init__(self, model, optimizer, scheduler, criterion, train_iter, dev_iter, params):
@@ -47,11 +47,10 @@ class Trainer(object):
         self.max_num_epochs = params.epochs
         self.best_val_loss = float("inf")
         self.summary_writer = SummaryWriter(params.model_dir + "runs")
+        self.decode_every_num_epochs = 3
 
     def train_epoch(self, data_iter):
-        """
-        Train Encoder-Decoder model for one single epoch
-        """
+        """ Train Encoder-Decoder model for one single epoch """
         self.model.train()
         total_loss = 0
         n_word_total = 0
@@ -108,6 +107,9 @@ class Trainer(object):
                     self.optimizer.step_and_update_lr()
                 else:
                     self.optimizer.step()
+
+                self.summary_writer.add_scalar(
+                    "train/lr", self.optimizer._get_lr_scale(), self.iterations)
 
                 # update the average loss
                 batch_loss = loss.item()
@@ -193,8 +195,12 @@ class Trainer(object):
     def batch_reverse_tokenization(self, batch):
         """
         Convert a batch of sequences of word IDs to words in a batch
+
         Arguments:
             batch: a tensor containg the decoded examples(with word ids representing the sequence)
+
+        Returns:   
+            A list of decoded translations
         """
         sentences = []
         for example in batch:
@@ -244,7 +250,7 @@ class Trainer(object):
         dataset = Dataset(new_training_data, fields=[
                           ("src", self.params.SRC), ("trg", self.params.TRG)])
 
-        data_iterator = DataIterator(dataset, batch_size=self.params.train_data_size, device=self.params.device,
+        data_iterator = DataIterator(dataset, batch_size=self.params.train_batch_size, device=self.params.device,
                                      repeat=False, sort_key=lambda x: (len(x.src), len(x.trg)),
                                      batch_size_fn=batch_size_fn, train=True, sort_within_batch=True, shuffle=True)
         return data_iterator
@@ -313,11 +319,18 @@ class Trainer(object):
                 "val/perplexity", math.exp(val_loss_avg), self.epoch)
 
             # TODO: write translations to Tensorboard
-            # every 5 epochs, write out translations using Greedy Decoding
+            # every `decode_every_num_epochs` epochs, write out translations using Greedy Decoding
             # to Tensorboard
-            # if (self.epoch + 1) % 5 == 0:
-            #     decoder = Translator(
-            #         self.model, self.dev_iter, self.params, self.params.device)
+            if (self.epoch + 1) % self.decode_every_num_epochs == 0:
+                num_translations = 5
+                dev_iter = copy.copy(self.dev_iter)
+                decoder = Translator(model=self.model, dev_iter=list(dev_iter)[:num_translations],
+                                     params=self.params, device=self.params.device)
+                translations = decoder.greedy_decode(max_len=100)
+                translation = [" ".join(translation)
+                               for translation in translations]
+                self.summary_writer.add_text(
+                    "transformer/translation", " \n".join(translation), self.epoch)
 
             print(
                 f'Avg Val Loss: {val_loss_avg} | Val Perplexity: {math.exp(val_loss_avg)} | Time: {val_mins}m {val_secs}s')
