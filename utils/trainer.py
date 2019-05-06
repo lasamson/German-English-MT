@@ -105,11 +105,10 @@ class Trainer(object):
                 # update the parameters
                 if isinstance(self.optimizer, ScheduledOptimizer):
                     self.optimizer.step_and_update_lr()
+                    self.summary_writer.add_scalar(
+                        "train/lr", self.optimizer._get_lr_scale(), self.iterations)
                 else:
                     self.optimizer.step()
-
-                self.summary_writer.add_scalar(
-                    "train/lr", self.optimizer._get_lr_scale(), self.iterations)
 
                 # update the average loss
                 batch_loss = loss.item()
