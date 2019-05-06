@@ -1,8 +1,6 @@
 import argparse
 import torch
-from torch import nn
-from torch.autograd import Variable
-from torch import optim
+from torch import optim, nn
 from torch.nn.utils import clip_grad_norm
 from torch.nn import functional as F
 from utils.data_loader import load_dataset
@@ -67,7 +65,7 @@ def main(params):
 
     # intialize the Trainer
     trainer = Trainer(model, optimizer, scheduler, criterion,
-                      params.epochs, train_iter, dev_iter, params)
+                      train_iter, dev_iter, params)
 
     if params.restore_file:
         restore_path = os.path.join(
