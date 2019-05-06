@@ -37,6 +37,7 @@ def main(params):
 
     params.src_vocab_size = de_size
     params.tgt_vocab_size = en_size
+    params.sos_index = EN.vocab.stoi["<s>"]
     params.pad_token = EN.vocab.stoi["<pad>"]
     params.eos_index = EN.vocab.stoi["</s>"]
     params.itos = EN.vocab.itos
