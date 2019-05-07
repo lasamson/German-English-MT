@@ -158,6 +158,15 @@ class Trainer(object):
             example_to_perplexity.items(), key=lambda kv: kv[1], reverse=True)
         slice_index = int(boost_percent * len(sorted_examples))
         new_examples = sorted_examples[:slice_index]
+
+        top_20 = new_examples[:20]
+        top_ger = top_20[:][0][0]
+        top_eng = top_20[:][0][1]
+
+        for i in range(len(top_ger)):
+            print(top_ger[i])
+            print(top_eng(i))
+
         return new_examples
 
     def compute_perplexity_on_batch(self, output: torch.Tensor, target: torch.Tensor, batch_size: int, seq_len: int) -> List[float]:
@@ -177,7 +186,7 @@ class Trainer(object):
         perplexity = torch.exp(log_likelihood)
         perplexity = perplexity.view(batch_size, seq_len)
         avg_perplexity = torch.mean(perplexity, dim=1)
-        return [pp.item() for pp in avg_perplexity.tolist()]
+        return [pp for pp in avg_perplexity.tolist()]
 
     def validate(self):
         """
