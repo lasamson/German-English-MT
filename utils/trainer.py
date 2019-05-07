@@ -236,7 +236,7 @@ class Trainer(object):
         for example in batch.tolist():
             sentence = []
             for token_id in example:
-                token_id = int(token_id.item())
+                token_id = int(token_id)
                 if token_id == self.params.eos_index:
                     break
                 sentence.append(self.params.itos[token_id])
