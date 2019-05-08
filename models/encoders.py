@@ -9,9 +9,9 @@ from .transformer.embeddings import Embedder, PositionalEncoder
 from .transformer.layers import EncoderLayer, DecoderLayer
 from .transformer.sublayers import LayerNorm
 from utils.utils import get_clones
-from .embed_dropout import embedded_dropout
-from .weight_drop import WeightDrop
-from .variational_dropout import VariationalDropout
+from .dropout.embed_dropout import embedded_dropout
+from .dropout.weight_drop import WeightDrop
+from .dropout.variational_dropout import VariationalDropout
 
 
 class GRUEncoder(nn.Module):

@@ -28,7 +28,11 @@ class ScheduledOptimizer():
         self._optimizer.zero_grad()
 
     def _get_lr_scale(self):
-        """ Get the learning rate scale """
+        """ 
+        Get the learning rate scale 
+        This learning rate scale comes from the
+        `Attention is all you need` paper
+        """
         return self.factor * (self.d_model ** (-.5) * np.min([np.power(self.n_current_steps, -0.5),
                                                               np.power(self.n_warmup_steps, -1.5) * self.n_current_steps]))
 
