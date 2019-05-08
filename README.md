@@ -34,7 +34,8 @@ Inorder to preprocess the **original** IWSLT-16 DE-EN dataset with Moses Tokeniz
 
 Apply this script, will give you two new folders, namely: **/bpe** and **/tok**
 
-# Attentional GRU Model
+# Models
+## Attentional GRU Model
 
 The Attentional Encoder-Decoder network  uses a Gated Recurrent Unit (GRU) as the 
 Encoder and the Decoder of the Seq2Seq model. We use **Bahdanau** attention to compute context vectors between the decoder hidden state and all encoder hidden states. 
@@ -70,7 +71,7 @@ tgt_emb_prj_weight_sharing=True
 emb_src_tgt_weight_sharing=True
 ```
 
-# Transformer Model
+## Transformer Model
 
 We also experiment with a Transformer Encoder-Decoder Architecture that uses a self-attention mechanism to compute representations. We use base model described the **Attention is all you Need** (Vaswani et. al) paper but with slightly modified parameters.
 
@@ -106,6 +107,12 @@ n_warmup_steps=16000
 tgt_emb_prj_weight_sharing=True
 emb_src_tgt_weight_sharing=True
 ```
+
+## Boosted GRU
+
+
+
+
 
 # Training & Evaluating
 Training and Evaluating models is simply done by making use of the `./scripts/train_eval.sh` script. The script takes in two arguments: first is the **configuration file** (shell script) which should be located in the `./configs/` folder and a **experiment name**. An example of training our transformer with our configurations located at `./configs/transformer_final.sh` and the experiment name `transformer` can be done with this command:
