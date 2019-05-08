@@ -70,12 +70,6 @@ tgt_emb_prj_weight_sharing=True
 emb_src_tgt_weight_sharing=True
 ```
 
-**Training and Evaluating Attentional GRU**:
-
-```
-./scripts/train_eval.sh .configs/gru_attention_final.sh gru_attention
-```
-
 # Transformer Model
 
 We also experiment with a Transformer Encoder-Decoder Architecture that uses a self-attention mechanism to compute representations. We use base model described the **Attention is all you Need** (Vaswani et. al) paper but with slightly modified parameters.
@@ -113,13 +107,14 @@ tgt_emb_prj_weight_sharing=True
 emb_src_tgt_weight_sharing=True
 ```
 
-**Training & Evaluating the Transformer**:
+# Training & Evaluating
+Training and Evaluating models is simply done by making use of the `./scripts/train_eval.sh` script. The script takes in two arguments: first is the **configuration file** (shell script) which should be located in the `./configs/` folder and a **experiment name**. An example of training our transformer with our configurations located at `./configs/transformer_final.sh` and the experiment name `transformer` can be done with this command:
+
 ```
 ./scripts/train_eval.sh ./configs/transformer_final.sh transformer
 ```
 
-# Training & Evaluating
-Training and Evaluating models is simply done by making a 
+This will create a new folder in the `./experiments/` folder with the name `transformer`. In this folder will be a `params.json` with the configurations for the current experiment, a `train.log` file which contains information related to the training of the model, a `checkpoints/` folder, and a `runs/` folder that will be used by Tensorboard to log metrics (train/val loss and perplexity) related to training.
 
 # Results (BLEU Scores on Dev Set)
 
