@@ -1,7 +1,7 @@
 import torch
 from torch.autograd import Variable
 import torch.nn.functional as F
-from utils.beam_search import beam_search, beam_search_single
+from utils.beam_search import beam_search_single, translate_batch
 from tqdm import tqdm
 import logging
 import numpy as np
@@ -109,8 +109,6 @@ class Translator(object):
         with tqdm(total=len(self.dev_iter)) as t:
             with torch.no_grad():
                 for index, batch in enumerate(self.dev_iter):
-                    # if (index + 1) % 20 == 0:
-                        # break
                     src, src_lengths = batch.src
                     src_mask = (src != self.params.pad_token).unsqueeze(-2)
 
@@ -125,25 +123,19 @@ class Translator(object):
 
                     encoder_final = encoder_final[:self.model.decoder.num_layers] if self.params.model_type == "GRU" else None
 
-                    # output: [batch_size, seq_len, hidden_size], hidden: [num_layers, batch_size, hidden_size]
-                    # translations = beam_decode_iterative(self.model, encoder_final, encoder_output, self.params.sos_index, self.params.eos_index, beam_width, num_sentences, src_mask, trg_mask, self.device)
-                    # translations = beam_decode(self.model.decoder, hidden, output, self.params.sos_index, self.params.eos_index, beam_width, num_sentences, src_mask, self.device)
+                    if self.params.model_type == "GRU":
+                        trg_mask = None
+                        translation = beam_search_single(model=self.model, encoder_final=encoder_final, encoder_outputs=encoder_output,
+                                                         src_mask=src_mask, beam_size=beam_width,
+                                                         alpha=1.0, params=self.params, max_seq_len=100)
+                    else:
+                        translation, _ = translate_batch(model=self.model, src_enc=encoder_output, src_mask=src_mask,
+                                                         beam_size=beam_width, alpha=0.0, params=self.params, max_seq_len=100)
 
-                    trg_mask = None
-
-                    translation = beam_search_single(self.model, encoder_final, encoder_output, beam_width,
-                                                     self.params.sos_index, self.params.eos_index, src_mask, trg_mask, 1.0, self.device)
-
-                    # run beam search to get translations
-                    # translations = beam_search(model=self.model, encoder_hidden=encoder_final, encoder_output=encoder_output,
-                    #                            sos_index=self.params.sos_index, eos_index=self.params.eos_index,
-                    #                            pad_index=self.params.pad_token, beam_width=beam_width,
-                    #                            src_mask=src_mask, tgt_mask=trg_mask,
-                    #                            alpha=1, device=self.device, max_len=50)
-
-                    # convert tensor of word indicies to words
+                    # convert tensor of word indices to words
                     tokens = self.batch_reverse_tokenization(
                         translation.view(1, -1))
+                    print(tokens)
                     decoded_sentences.extend(tokens)
                     t.update()
         return decoded_sentences
