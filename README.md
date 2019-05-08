@@ -121,7 +121,7 @@ Training and Evaluating models is simply done by making use of the `./scripts/tr
 ./scripts/train_eval.sh ./configs/transformer_final.sh transformer
 ```
 
-This will create a new folder in the `./experiments/` folder with the name `transformer`. In this folder will be a `params.json` with the configurations for the current experiment, a `train.log` file which contains information related to the training of the model, a `checkpoints/` folder, a `outputs/` folder that will contain translations of the dev set using **Beam Search**/**Greedy Decoding**, and a `runs/` folder that will be used by Tensorboard to log metrics (train/val loss and perplexity) related to training.
+This will create a new folder in the `./experiments/` folder with the name `transformer`. In this folder will be a `params.json` with the configurations for the current experiment, a `train.log` file which contains information related to the training of the model, a `checkpoints/` folder, a `outputs/` folder that will contain translations of the dev set using either **Beam Search** or **Greedy Decoding**, and a `runs/` folder that will be used by Tensorboard to log metrics (train/val loss and perplexity) related to training.
 
 ```
 ./experiments
@@ -141,6 +141,9 @@ This will create a new folder in the `./experiments/` folder with the name `tran
 │       │   beam_search_outputs_size=5.en.final  
 │       │   greedy_outputs.en.final  
 │   
+└───gru_attention
+│   │   ...
+│
 ```
 # Results (BLEU Scores on Dev Set)
 
