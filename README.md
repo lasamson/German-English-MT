@@ -17,10 +17,11 @@ English: So, I'll talk about musical composition, even though I don't know where
 ```
 
 **Dataset Statistics:**
-| Dataset | \# of sentences |
-| ------- | --------------- |
-| Train   | 196884          |
-| Dev     | 7883            |
+
+| Dataset | Number of sentences |
+| ------- | ------------------- |
+| Train   | 196884              |
+| Dev     | 7883                |
 
 ## Preprocessing
 Instead of batching by number of sentences, we batch instead by the number of tokens, such that we can most efficiently use the GPU resources (pack each batch as much as possible). We also tokenize the sentences using **Moses Tokenizer**, and encode sentences using **Byte-Pair Encoding** with 32K merge operations, which has a **shared source-target vocabulary** of ~30,000 tokens. 
@@ -28,7 +29,7 @@ Instead of batching by number of sentences, we batch instead by the number of to
 Inorder to preprocess the **original** IWSLT-16 DE-EN dataset with Moses Tokenizer and apply a shared BPE vocab, run the following script:
 
 ```
-./utils/tokenize_and_preprocess_bpe.sh
+./scripts/tokenize_and_preprocess_bpe.sh
 ```
 
 Apply this script, will give you two new folders, namely: **/bpe** and **/tok**
@@ -72,7 +73,7 @@ emb_src_tgt_weight_sharing=True
 **Training and Evaluating Attentional GRU**:
 
 ```
-./scripts/train_eval_gru_atention.sh gru_attention
+./scripts/train_eval.sh .configs/gru_attention_final.sh gru_attention
 ```
 
 # Transformer Model
@@ -114,7 +115,7 @@ emb_src_tgt_weight_sharing=True
 
 **Training & Evaluating the Transformer**:
 ```
-./scripts/train_eval_transformer.sh transformer
+./scripts/train_eval.sh ./configs/transformer_final.sh transformer
 ```
 
 # Training & Evaluating
