@@ -158,6 +158,11 @@ class Trainer(object):
             example_to_perplexity.items(), key=lambda kv: kv[1], reverse=True)
         slice_index = int(boost_percent * len(sorted_examples))
         new_examples = sorted_examples[:slice_index]
+        with open('hardex.txt', 'w+') as f:
+            for line in new_examples[:20]:
+                f.write(line)
+            f.write('\n')
+
         return new_examples
 
     def compute_perplexity_on_batch(self, output: torch.Tensor, target: torch.Tensor, batch_size: int, seq_len: int) -> List[float]:
@@ -177,7 +182,7 @@ class Trainer(object):
         perplexity = torch.exp(log_likelihood)
         perplexity = perplexity.view(batch_size, seq_len)
         avg_perplexity = torch.mean(perplexity, dim=1)
-        return [pp.item() for pp in avg_perplexity.tolist()]
+        return [pp for pp in avg_perplexity.tolist()]
 
     def validate(self):
         """
