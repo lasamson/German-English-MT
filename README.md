@@ -1,4 +1,4 @@
-****# Neural Machine Translation (German to English)
+# Neural Machine Translation (German to English)
 
 **Goal**:
 To build a neural machine translation model to translate from German to English. Namely, we aim to retrieve coherent English translations from German source sentences using a parallel corpus of German-English sentence pairs as our primary data source. This task is of paramount importance in today’s world, in the fields of academia and industry alike. 
@@ -17,10 +17,10 @@ English: So, I'll talk about musical composition, even though I don't know where
 ```
 
 **Dataset Statistics:**
-| Dataset | # of sentences |
-| ------- | -------------- |
-| Train   | 196884         |
-| Dev     | 7883           |
+| Dataset | \# of sentences |
+| ------- | --------------- |
+| Train   | 196884          |
+| Dev     | 7883            |
 
 ## Preprocessing
 Instead of batching by number of sentences, we batch instead by the number of tokens, such that we can most efficiently use the GPU resources (pack each batch as much as possible). We also tokenize the sentences using **Moses Tokenizer**, and encode sentences using **Byte-Pair Encoding** with 32K merge operations, which has a **shared source-target vocabulary** of ~30,000 tokens. 
