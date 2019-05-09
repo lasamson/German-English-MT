@@ -46,6 +46,26 @@ David Gallo : This is Bill Lange . I 'm Dave Gallo .
 
 Apply this script, will give you two new folders, namely: **/bpe** and **/tok**
 
+```
+./data
+│
+└───iwslt
+│   │   dev.de
+│   │   dev.en 
+│   │   train.de
+│   │   train.en 
+│   │
+│   └───bpe
+│       │   dev.de 
+│       │   dev.en 
+│       │   ...
+│   └───tok 
+│       │   dev.de.atok  
+│       │   dev.en.atok  
+│       │   ...  
+│   
+```
+
 # Models
 ## Attentional GRU Model
 
