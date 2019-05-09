@@ -33,6 +33,7 @@ So, I'll talk about musical composition, even though I don't know where to start
 | ------- | ------------------- |
 | Train   | 196884              |
 | Dev     | 7883                |
+| Test    | 2762                |
 
 ## Preprocessing
 Instead of batching by number of sentences, we batch instead by the number of tokens, such that we can most efficiently use the GPU resources (pack each batch as much as possible). We also tokenize the sentences using **Moses Tokenizer** (`./utils/tokenizer/tokenizer.perl`), and encode sentences using **Byte-Pair Encoding** with 32K merge operations, which has a **shared source-target vocabulary** of ~30,000 tokens. 
