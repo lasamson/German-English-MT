@@ -17,10 +17,14 @@ pip install -r requirements.txt
 
 Bilingual (bitext) data from [**IWSLT-2016**](https://piazza.com/class_profile/get_resource/jr6ue6jamzn5e7/js50rtixawp4fg) DE-EN, which consists of approximately 200,000 parallel German-English sentence pairs. An example of a German-English sentence pair is illustrated below:	
 
+German:
 ```
-German: Also werde ich über Musikkomposition sprechen, obwohl ich nicht weiß, wo ich anfangen soll.
+Also werde ich über Musikkomposition sprechen, obwohl ich nicht weiß, wo ich anfangen soll.
+```
 
-English: So, I'll talk about musical composition, even though I don't know where to start.
+English: 
+```
+So, I'll talk about musical composition, even though I don't know where to start.
 ```
 
 **Dataset Statistics:**
