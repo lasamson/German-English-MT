@@ -231,14 +231,20 @@ This will create a new folder in the `./experiments/` folder with the name `tran
 **Note**: if you already have a trained model in a `./experiments/exp_name/checkpoints` folder, you can you evaluate a model by simply calling the `translate.py` script:
 
 ```
-python evaluate.py -data_path="./data/iwslt/bpe/" -model_dir="./exeriments/{exp_name}/" -model_file="{model_file}" -beam_size={beam_size}
+python evaluate.py -data_path="./data/iwslt/bpe/" 
+                   -model_dir="./exeriments/{exp_name}/" 
+                   -model_file="{model_file}" 
+                   -beam_size={beam_size}
 ```
 
 This script assumes that the `model_file` is in the `./experiments/exp_name/checkpoints` folder. If you however want to average the last **n** checkpoints for evaluation, 
 you can forgo the `-model_file` argument and use the `-average` argument instead. This is done in the following manner:
 
 ```
-python evaluate.py -data_path="./data/iwslt/bpe/" -model_dir="./exeriments/{exp_name}/" -average={n} -beam_size={beam_size}
+python evaluate.py -data_path="./data/iwslt/bpe/" 
+                   -model_dir="./exeriments/{exp_name}/" 
+                   -average={n} 
+                   -beam_size={beam_size}
 ```
 
 ## Description of Hyperparameters
