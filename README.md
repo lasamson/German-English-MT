@@ -13,6 +13,16 @@ Before doing anything please install the requirements for this project using the
 pip install -r requirements.txt
 ```
 
+## Quick Start
+
+In order to reproduce our results, please follow the instructions below:
+
+1. Clone this repo `git clone https://github.com/lasamson/German-English-MT`
+2. [Download](https://piazza.com/class_profile/get_resource/jr6ue6jamzn5e7/js50rtixawp4fg) the training and dev data. Make a new `./data/iwslt/` folder in the root directory and place all train and dev files there. 
+3. Preprocess and apply BPE to the original dataset: `./scripts/tokenize_and_preprocess_bpe.sh`
+4. Train and Evaluate our models by using the following script: `./scripts/train_eval.sh {config_file} {exp_name}`, where **config_file** is the location of a model configuraion file located in `./configs/` and **exp_name** is an experiment name. An example of training our Transformer model is in the [Training & Evaluating](#training-and-evaluating) Section
+
+
 ## Dataset
 
 Bilingual (bitext) data from [**IWSLT-2016**](https://piazza.com/class_profile/get_resource/jr6ue6jamzn5e7/js50rtixawp4fg) DE-EN, which consists of approximately 200,000 parallel German-English sentence pairs. An example of a German-English sentence pair is illustrated below:	
@@ -41,7 +51,7 @@ Note: The link above for the **IWSLT-16** DE-EN contains only the Train & Dev se
 ### Preprocessing
 Instead of batching by number of sentences, we batch instead by the number of tokens, such that we can most efficiently use the GPU resources (pack each batch as much as possible). We also tokenize the sentences using **Moses Tokenizer** (`./utils/tokenizer/tokenizer.perl`), and encode sentences using **Byte-Pair Encoding** with 32K merge operations, which has a **shared source-target vocabulary** of ~30,000 tokens. 
 
-We rename both the train files to `train.en` and `train.de` and rename the validation set to `dev.en` and `dev.en`. We place these files in a `./data/iwslt` folder. These files have to be placed in this manner since our preprocessing script will assume that the data files are located in this specific location. 
+We place all of our original training/dev files in a `./data/iwslt/` folder. These files have to be placed in this manner since our preprocessing script will assume that the data files are located in this specific location. 
 
 Inorder to preprocess the **original** IWSLT-16 DE-EN dataset with **Moses Tokenizer** and apply a **shared BPE vocab**, run the following script:
 
@@ -196,7 +206,7 @@ model_type=GRU
 
 
 
-## Training & Evaluating
+## Training and Evaluating
 Training and Evaluating models is simply done by making use of the `./scripts/train_eval.sh` script. The script takes in two arguments: first is the **configuration file** (shell script) which should be located in the `./configs/` folder and a **experiment name**. An example of training & evaluating our transformer with our configurations located at `./configs/transformer_final.sh` and the experiment name `transformer` can be done with this command:
 
 ```
