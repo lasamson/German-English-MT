@@ -230,7 +230,17 @@ All of our models were trained on a single 1080Ti GPU.
 ## Using Tensorboard
 The training process for all experiments can be visualized with Tensorboard. In order to run Tensorboard to visualize all experiments, run `tensorboard -logdir=experiments/` in the root directory. This will create a new Tensorboard server and can be visualized using **localhost** with the port (default is port 6006) specified by Tensorboard.
 
-# Results (BLEU Scores on Dev Set)
+# Results
+
+## BLEU scores on the Dev Set
+
+| Model                         | Greedy Decoding | Beam Search         |
+| ----------------------------- | --------------- | ------------------- |
+| Seq2Seq w/ Bahdanau Attention | 31.6            | 33.0 (beam size=10) |
+| Transformer                   | 34.0            | 34.5 (beam_size=5)  |
+| Boosted GRU                   |                 |                     |
+
+## BLEU scores on the Test Set
 
 | Model                         | Greedy Decoding | Beam Search         |
 | ----------------------------- | --------------- | ------------------- |
