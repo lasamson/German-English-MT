@@ -6,9 +6,16 @@ To build a neural machine translation model to translate from German to English.
 **Motivation**:
 To overcome the language barrier and eventually improve communication channels for people worldwide. Translation between languages is of paramount importance in the modern age, in both academic and industrial settings alike.
 
+# Requirements
+Before doing anything please install the requirements for this project using the following command: 
+
+```
+pip install -r requirements.txt
+```
+
 # Dataset
 
-Bilingual (bitext) data from **IWSLT-2016**, which consists of approximately 200,000 parallel German-English sentence pairs. An example of a German-English sentence pair is illustrated below:	
+Bilingual (bitext) data from **IWSLT-2016** DE-EN, which consists of approximately 200,000 parallel German-English sentence pairs. An example of a German-English sentence pair is illustrated below:	
 
 ```
 German: Also werde ich über Musikkomposition sprechen, obwohl ich nicht weiß, wo ich anfangen soll.
@@ -26,7 +33,9 @@ English: So, I'll talk about musical composition, even though I don't know where
 ## Preprocessing
 Instead of batching by number of sentences, we batch instead by the number of tokens, such that we can most efficiently use the GPU resources (pack each batch as much as possible). We also tokenize the sentences using **Moses Tokenizer**, and encode sentences using **Byte-Pair Encoding** with 32K merge operations, which has a **shared source-target vocabulary** of ~30,000 tokens. 
 
-Inorder to preprocess the **original** IWSLT-16 DE-EN dataset with Moses Tokenizer and apply a shared BPE vocab, run the following script:
+We rename both the train files to `train.en` and `train.de` and rename the validation set to `dev.en` and `dev.en`. We place these files in a `./data/iwslt` folder. These files have to be placed in this manner since our preprocessing script will assume that the data files are located in this specific location. 
+
+Inorder to preprocess the **original** IWSLT-16 DE-EN dataset with **Moses Tokenizer** and apply a **shared BPE vocab**, run the following script:
 
 ```
 ./scripts/tokenize_and_preprocess_bpe.sh
@@ -44,8 +53,8 @@ David Gallo : This is Bill Lange . I 'm Dave Gallo .
 David Gall@@ o : This is Bill Lange . I '@@ m Da@@ ve Gall@@ o .
 ```
 
-Apply this script, will give you two new folders, namely: **/bpe** and **/tok**
-
+Applying the `tokenize_and_preprocess_bpe.sh` script will give create two new folders, namely: `/bpe` and `/tok` in the `./data/iwslt`
+folder
 ```
 ./data
 │
@@ -69,7 +78,7 @@ Apply this script, will give you two new folders, namely: **/bpe** and **/tok**
 # Models
 ## Attentional GRU Model
 
-The Attentional Encoder-Decoder network  uses a Gated Recurrent Unit (GRU) as the 
+The Attentional GRU uses a Gated Recurrent Unit (GRU) as the 
 Encoder and the Decoder of the Seq2Seq model. We use **Bahdanau** attention to compute context vectors between the decoder hidden state and all encoder hidden states. 
 
 **Encoder**:
@@ -79,7 +88,7 @@ Encoder and the Decoder of the Seq2Seq model. We use **Bahdanau** attention to c
 2 layer GRU with 512 hidden units using Bahdanau attentional mechanism 
 
 **Additional Information**:
-Since the dataset is relatively small, in order to regularize our model we apply dropout (Variational, Embedding Dropout, Weight Dropout) to various areas of the architecture
+Since the dataset is relatively small, in order to regularize our model we apply dropout (Variational, Embedding Dropout, Weight Dropout) to various areas of the architecture. Since we are using a shared vocab, we can also tie the weights for both the Encoder/Decoder Embedding layers and also the softmax layer. This also regularizes the model by reducing the number of parameters.
 
 **GRU Attention Hyperparamers**:
 
@@ -177,6 +186,13 @@ This will create a new folder in the `./experiments/` folder with the name `tran
 │   │   ...
 │
 ```
+
+## Hardware
+All of our models were trained on a single 1080Ti GPU.
+
+## Using Tensorboard
+The training process for all experiments can be visualized with Tensorboard. In order to run Tensorboard to visualize all experiments, run `tensorboard -logdir=experiments/` in the root directory. This will create a new Tensorboard server and can be visualized using **localhost** with the port (default is port 6006) specified by Tensorboard.
+
 # Results (BLEU Scores on Dev Set)
 
 | Model                         | Greedy Decoding | Beam Search         |

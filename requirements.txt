@@ -1,0 +1,11 @@
+numpy==1.15.4
+sacrebleu==1.3.1
+spacy==2.0.12
+tb-nightly==1.14.0a20190504
+tensorboard==1.13.1
+tensorflow==1.13.1
+tensorflow-estimator==1.13.0
+torch==1.1.0
+torchtext==0.3.0
+tqdm==4.28.1
+typing==3.6.6
