@@ -1,6 +1,5 @@
 from torchtext import data, datasets
 from torchtext.data import Field, BucketIterator, Iterator
-import spacy
 import torch
 import math
 
@@ -89,6 +88,11 @@ def load_dataset(data_path, train_batch_size=4096, dev_batch_size=1, max_len=100
 
     dev_data = datasets.TranslationDataset(
         exts=("dev.de", "dev.en"), fields=(SRC, TRG), path=data_path)
+
+    test_data = data.TranslationDataset(
+        exts=("test.de"), fields=(SRC), path=data_path)
+
+    print(test_data)
 
     # build the vocab using the training data
     SRC.build_vocab(train_data.src, train_data.trg)
