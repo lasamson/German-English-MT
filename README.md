@@ -228,6 +228,34 @@ This will create a new folder in the `./experiments/` folder with the name `tran
 │
 ```
 
+## Description of Hyperparameters
+
+| Hyperparameter             | Description                                                                                                                                           |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| train_batch_size           | The batch size of the training data (# of tokens)                                                                                                     |
+| dev_batch_size             | The batch size of the dev data (# of tokens)                                                                                                          |
+| embedding_size             | Embedding size                                                                                                                                        |
+| n_layers_enc               | Number of layers for the Encoder                                                                                                                      |
+| n_layers_dec               | Number of layers for the Decoder                                                                                                                      |
+| max_len                    | Maximum sequence length                                                                                                                               |
+| lr                         | Learning Rate                                                                                                                                         |
+| grad_clip                  | The max norm of the gradients                                                                                                                         |
+| tf                         | The probability of using teacher-forcing during training                                                                                              |
+| input_dropout              | Dropout applied to the Embeddings (for Attentional GRU, this applies Embedding Dropout)                                                               |
+| layer_dropout              | For Attentional GRU, this is the dropout applied inbetween layers (Variational Dropout). For Transformer, this is the dropout applied after LayerNorm |
+| relu_dropout               | Dropout applied after the ReLU non-linearity in the Positionwise Feedforward Net (only applies to the Transformer)                                    |
+| attention_dropout          | Dropout applied to the attention scores matrix (only applies to the Transformer)                                                                      |
+| num_heads                  | Number of heads in the multi-head atention (only applies to the Transformer)                                                                          |
+| d_ff                       | Hidden dimensionality of the Positionwise Feedforward Net (only applies to the Transformer)                                                           |
+| label_smoothing            | Label smoothing parameter (only applies to the Transformer)                                                                                           |
+| n_warmup_steps             | Number of warmup steps in the learning rate decay scheme used in the "Attention is all you need" paper (only applies to the Transformer)              |
+| attention                  | Type of attention to use for Attentional GRU models (eg. Bahdanau or Dot)                                                                             |
+| tgt_emb_prj_weight_sharing | Whether to tie the weights of the decoder embedding layer and the softmax linear layer                                                                |
+| emb_src_tgt_weight_sharing | Whether to tie the weights of the encoding embedding layer and the decoder embedding layer                                                            |
+| boost_percent              | Percentage of hardest examples to duplicate                                                                                                           |
+| boost_warmup               | How many epochs to go without boosting before starting to boost                                                                                       |
+| boost                      | Wheter or not to boost the model                                                                                                                      |
+
 ## Hardware
 All of our models were trained on a single 1080Ti GPU.
 
