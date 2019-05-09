@@ -150,7 +150,7 @@ emb_src_tgt_weight_sharing=True
 ```
 
 ## Boosted GRU
-Lastly, we also experimented with **Boosting** (Zhang et. al) our dataset, by duplicating 10% of the hardest examples in the dataset for each epoch. THe intuition behind this idea is that for any problem, some data points are harder to learn than others. However, during training, models treat each data point equally. Thus, it makes sense to make the model spend more time on harder training examples instead, and this is achieved by duplicating hard examples.
+Lastly, we also experimented with **Boosting** (Zhang et. al) our dataset, by duplicating 10% of the hardest examples in the dataset for each epoch. The intuition behind this idea is that for any problem, some data points are harder to learn than others. However, during training, models treat each data point equally. Thus,it makes sense to make the model spend more time on harder training examples instead, and this is achieved by duplicating hard examples.
 
 **Encoder**:
 2 layer bidirectional GRU with 512 hidden units. 
