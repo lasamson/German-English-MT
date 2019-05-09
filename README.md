@@ -150,8 +150,41 @@ emb_src_tgt_weight_sharing=True
 ```
 
 ## Boosted GRU
+Lastly, we also experimented with **Boosting** (Zhang et. al) our dataset, by duplicating 10% of the hardest examples in the dataset for each epoch. THe intuition behind this idea is that for any problem, some data points are harder to learn than others. However, during training, models treat each data point equally. Thus, it makes sense to make the model spend more time on harder training examples instead, and this is achieved by duplicating hard examples.
 
+**Encoder**:
+2 layer bidirectional GRU with 512 hidden units. 
 
+**Decoder**:
+2 layer GRU with 512 hidden units using Bahdanau attentional mechanism 
+
+**Additional Information**:
+The hardness of a data point is calculated using the average perplexity of the sentence. Intuitively, it makes sense that an example with high perplexity is difficult for the model to classify, and thus the model should spend more time on it. Additionally, we ran the boosted model for only 10 epochs, and compared it with the regular model to see if there were any noticeable differences between the two.
+
+**Transformer Hyperparameters**:
+```
+epochs=10 
+min_freq=1
+train_batch_size=4096
+dev_batch_size=1
+embedding_size=512
+hidden_size=512
+n_layers_enc=2
+n_layers_dec=2
+max_len=100
+lr=0.001
+grad_clip=5.0
+tf=1.0
+input_dropout=0.1
+layer_dropout=0.3
+attention=bahdanau
+tgt_emb_prj_weight_sharing=True
+emb_src_tgt_weight_sharing=True
+boost_percent=0.1
+boost_warmpup=0
+exp_name=$1
+model_type=GRU
+```
 
 
 
