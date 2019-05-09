@@ -41,7 +41,7 @@ David Gallo : This is Bill Lange . I 'm Dave Gallo .
 
 **Sequence applied with BPE**:
 ```
-David Gallo : This is Bill Lange . I 'm Dave Gallo .
+David Gall@@ o : This is Bill Lange . I '@@ m Da@@ ve Gall@@ o .
 ```
 
 Apply this script, will give you two new folders, namely: **/bpe** and **/tok**
