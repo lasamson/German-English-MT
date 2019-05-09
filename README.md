@@ -15,7 +15,7 @@ pip install -r requirements.txt
 
 # Dataset
 
-Bilingual (bitext) data from **IWSLT-2016** DE-EN, which consists of approximately 200,000 parallel German-English sentence pairs. An example of a German-English sentence pair is illustrated below:	
+Bilingual (bitext) data from [**IWSLT-2016**](https://piazza.com/class_profile/get_resource/jr6ue6jamzn5e7/js50rtixawp4fg) DE-EN, which consists of approximately 200,000 parallel German-English sentence pairs. An example of a German-English sentence pair is illustrated below:	
 
 ```
 German: Also werde ich über Musikkomposition sprechen, obwohl ich nicht weiß, wo ich anfangen soll.
