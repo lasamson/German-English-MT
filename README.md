@@ -13,7 +13,7 @@ Before doing anything please install the requirements for this project using the
 pip install -r requirements.txt
 ```
 
-## Quick Start
+## Getting Started 
 
 In order to reproduce our results, please follow the instructions below:
 
