@@ -272,16 +272,6 @@ The training process for all experiments can be visualized with Tensorboard. In 
 | Transformer                   | 34.0            | 34.5 (beam_size=5)  |
 | Boosted GRU                   |                 |                     |
 
-## BLEU scores on the Test Set
-
-| Model                         | Greedy Decoding | Beam Search         |
-| ----------------------------- | --------------- | ------------------- |
-| Seq2Seq w/ Bahdanau Attention | 31.6            | 33.0 (beam size=10) |
-| Transformer                   | 34.0            | 34.5 (beam_size=5)  |
-| Boosted GRU                   |                 |                     |
-
-
-
 # Things to make note of
 
 - Batching by the number of tokens
