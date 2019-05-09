@@ -14,6 +14,9 @@ def average_checkpoints(model_dir, n):
     Arguments:
         model_dir: directory of model
         n: number of checkpoints to averag
+
+    Returns:
+        A dictionary containing the average of the weights for all checkpoints
     """
 
     averaged = {}
@@ -34,7 +37,16 @@ def average_checkpoints(model_dir, n):
 
 
 def get_last_n_checkpoints(model_dir, n):
-    """ Get the last `n` checkpoints from the model directory """
+    """ 
+    Get the last `n` checkpoints from the model directory 
+
+    Arguments:
+        model_dir: directory of the model (eg. ./experiments/transformer_large)   
+        n: number of checkpoints to get from the model_dir/checkpoints directory
+
+    Returns:
+        A List of the checkpoint file paths
+    """
 
     checkpoint_dir = model_dir + "checkpoints/"
 

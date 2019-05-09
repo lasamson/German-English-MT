@@ -3,8 +3,118 @@ from queue import PriorityQueue
 import torch.nn.functional as F
 import torch
 import numpy as np
-from utils.beam import Beam
 from utils.utils import make_tgt_mask
+
+
+class Beam():
+    '''
+    Class for managing the internals of the beam search process.
+    '''
+
+    def __init__(self, size, alpha, params):
+
+        self.size = size
+        self._done = False
+        self.params = params
+        self.alpha = alpha
+
+        # The score for each translation on the beam.
+        self.scores = torch.zeros(
+            (size,), dtype=torch.float, device=self.params.device)
+        self.all_scores = []
+
+        # The backpointers at each time-step.
+        self.prev_ks = []
+
+        # The outputs at each time-step.
+        self.next_ys = [torch.full(
+            (size,), self.params.pad_token, dtype=torch.long, device=self.params.device)]
+        self.next_ys[0][0] = self.params.sos_index
+
+    def get_current_state(self):
+        """Get the outputs for the current timestep."""
+        return self.get_tentative_hypothesis()
+
+    def get_current_origin(self):
+        """Get the backpointers for the current timestep."""
+        return self.prev_ks[-1]
+
+    @property
+    def done(self):
+        return self._done
+
+    def advance(self, word_prob):
+        """Update beam status and check if finished or not."""
+        num_words = word_prob.size(1)
+
+        # Sum the previous scores (apply length normalization penalty at each step).
+        if len(self.prev_ks) > 0:
+            beam_lk = word_prob + \
+                self.scores.unsqueeze(1).expand_as(word_prob)
+        else:
+            beam_lk = word_prob[0]
+
+        flat_beam_lk = beam_lk.view(-1)
+
+        # this is weird issue with torch.topk
+        # need to run it twice to get the correct outputs
+        best_scores, best_scores_id = flat_beam_lk.topk(
+            self.size, 0, True, True)  # 1st sort
+        best_scores, best_scores_id = flat_beam_lk.topk(
+            self.size, 0, True, True)  # 2nd sort
+
+        self.all_scores.append(self.scores)
+        self.scores = best_scores
+
+        # bestScoresId is flattened as a (beam x word) array,
+        # so we need to calculate which word and beam each score came from
+        prev_k = best_scores_id / num_words
+        self.prev_ks.append(prev_k)
+        self.next_ys.append(best_scores_id - prev_k * num_words)
+
+        # End condition is when top-of-beam is EOS.
+        if self.next_ys[-1][0].item() == self.params.eos_index:
+            self._done = True
+            self.all_scores.append(self.scores)
+
+        return self._done
+
+    def length_penalty(self, curr_len, alpha=0.0):
+        """
+        Add a length penalty to the scores of the hypotheses
+        See Google Neural Machine Translation System
+        """
+        return ((5 + curr_len) / 6.0) ** alpha
+
+    def sort_scores(self):
+        """Sort the scores."""
+        return torch.sort(self.scores, 0, True)
+
+    def get_the_best_score_and_idx(self):
+        """Get the score of the best in the beam."""
+        scores, ids = self.sort_scores()
+        return scores[1], ids[1]
+
+    def get_tentative_hypothesis(self):
+        """Get the decoded sequence for the current timestep."""
+        if len(self.next_ys) == 1:
+            dec_seq = self.next_ys[0].unsqueeze(1)
+        else:
+            _, keys = self.sort_scores()
+            hyps = [self.get_hypothesis(k) for k in keys]
+            hyps = [[self.params.sos_index] + h for h in hyps]
+            dec_seq = torch.LongTensor(hyps)
+
+        return dec_seq
+
+    def get_hypothesis(self, k):
+        """ Walk back to construct the full hypothesis. """
+        hyp = []
+        for j in range(len(self.prev_ks) - 1, -1, -1):
+            hyp.append(self.next_ys[j+1][k])
+            k = self.prev_ks[j][k]
+
+        return list(map(lambda x: x.item(), hyp[::-1]))
 
 
 def translate_batch(model, src_enc, src_mask, beam_size, alpha, params, max_seq_len):
@@ -12,7 +122,7 @@ def translate_batch(model, src_enc, src_mask, beam_size, alpha, params, max_seq_
     Translate all source sequences in a batch.
 
     This code is heavilty borrowed from OpenNMT. We have adapted the code to fit our needs
-    and our models
+    and to our models
 
     Note: this method only works for Seq2Seq models that use Transformer as the Encoder/Decoder.
     This will not work for GRU Encoders/Decoders. If you want to use GRU, then look at the
@@ -23,7 +133,7 @@ def translate_batch(model, src_enc, src_mask, beam_size, alpha, params, max_seq_
         src_enc: the encoder output
         src_mask: the mask used on the source sequence
         beam_size: the size of the beam
-        alpha: controls the strenght of length normalization
+        alpha: controls the strength of length normalization
         max_seq_len: the maximum length of a sequence
         params: hyperparams related to the `model`
     Returns:
@@ -237,11 +347,8 @@ def beam_search_single(model, encoder_final, encoder_outputs, src_mask, beam_siz
         # [beam_size, 1, vocab_size]
         prob = F.log_softmax(model.generator(output), dim=-1)
 
-        # apply a lenght normalization penalty (look at Google NMT system)
-        penalty = ((5 + len(tokens_seq)) / 6.0) ** alpha
-
         # [beam_size, 1, vocab_size]
-        prob += (logprob_seq.unsqueeze(1).unsqueeze(1) / penalty)
+        prob += logprob_seq.unsqueeze(1).unsqueeze(1)
 
         prob = prob.flatten()
         logprob_seq, indices = torch.topk(prob, beam_size)

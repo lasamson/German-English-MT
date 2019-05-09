@@ -21,6 +21,7 @@ import math
 # to define a more efficient iterator
 
 # code from http://nlp.seas.harvard.edu/2018/04/03/attention.html
+
 global max_src_in_batch, max_tgt_in_batch
 
 
@@ -36,7 +37,7 @@ def batch_size_fn(new, count, sofar):
     if count == 1:
         max_src_in_batch = 0
         max_tgt_in_batch = 0
-    max_src_in_batch = max(max_src_in_batch, len(new.src))
+    max_src_in_batch = max(max_src_in_batch, len(new.src) + 2)
     max_tgt_in_batch = max(max_tgt_in_batch, len(new.trg) + 2)
     src_elements = count * max_src_in_batch
     tgt_elements = count * max_tgt_in_batch
@@ -82,29 +83,30 @@ def load_dataset(data_path, train_batch_size=4096, dev_batch_size=1, max_len=100
     TRG = Field(tokenize=lambda s: s.split(), init_token="<s>",
                 eos_token="</s>", batch_first=True, include_lengths=True)
 
+    # create a TranslationDataset for both the train and dev set
     train_data = datasets.TranslationDataset(exts=("train.de", "train.en"), fields=(
         SRC, TRG), path=data_path, filter_pred=lambda x: len(vars(x)['src']) <= max_len and len(vars(x)['trg']) <= max_len)
+
     dev_data = datasets.TranslationDataset(
         exts=("dev.de", "dev.en"), fields=(SRC, TRG), path=data_path)
-    
+
+    # build the vocab using the training data
     SRC.build_vocab(train_data.src, train_data.trg)
     TRG.build_vocab(train_data.src, train_data.trg)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # use custom DataIterator in order to minimize padding in a sequence
+    # and inoder to `pack` a batch fully inorder to maximmize the computation
+    # in a GPU
     train_iterator = DataIterator(train_data, batch_size=train_batch_size, device=device,
                                   repeat=False, sort_key=lambda x: (len(x.src), len(x.trg)),
                                   batch_size_fn=batch_size_fn, train=True, sort_within_batch=True, shuffle=True)
 
-    # dev_iterator = DataIterator(dev_data, batch_size=dev_batch_size, device=device,
-    #                      repeat=False, sort_key=lambda x: (len(x.src), len(x.trg)),
-    #                      batch_size_fn=batch_size_fn, train=False)
-
-    # train_iterator = BucketIterator(train_data, batch_size=train_batch_size, train=True,
-    #                                 sort_within_batch=True, sort_key=lambda x: (len(x.src), len(x.trg)),
-    #                                 repeat=False, device=device)
-
+    # use a regular Iterator since we want to be able to compare
+    # our translations to a gold standard file. If we use a
+    # `DataIterator` then we will get our translations in shuffled/random
+    # order
     dev_iterator = Iterator(dev_data, batch_size=dev_batch_size,
                             train=False, sort=False, repeat=False, device=device)
 

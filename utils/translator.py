@@ -29,8 +29,13 @@ class Translator(object):
     def greedy_decode(self, max_len):
         """ 
         Perform greedy decoding to obtain translations of the src sequences 
+
         Arguments:
             max_len: maximum length of target sequence
+
+        Returns:
+            This method returns a list of all decoded translations in the dev set using
+            greedy decoding
         """
         decoded_sentences = []
         self.model.eval()
@@ -73,15 +78,18 @@ class Translator(object):
                         trg_mask = make_tgt_mask(
                             trg, tgt_pad=self.params.pad_token)
 
-                        # pre_output: [batch_size, seq_len, hidden_size], hidden: [num_layers, batch_size, hidden_size]
-                        pre_output, hidden = self.model.decode(
+                        # output: [batch_size, seq_len, hidden_size], hidden: [num_layers, batch_size, hidden_size]
+                        output, hidden = self.model.decode(
                             trg, encoder_output, src_mask, trg_mask, encoder_final, hidden)
 
-                        # pass the pre_output through the generator to get prediction
-                        # pre_ouput[:, -1] => [batch_size, hidden_size]
+                        # pass the output through the generator to get prediction
+                        # take the last output and pass it through the
+                        # linear softmax layer to get preidctions
+
+                        # output[:, -1] => [batch_size, hidden_size]
                         # linear [hidden_size, tgt_vocab_size]
                         # prob: [batch_size, tgt_vocab_size]
-                        prob = self.model.generator(pre_output[:, -1])
+                        prob = self.model.generator(output[:, -1])
                         prob = F.log_softmax(prob, dim=-1)
 
                         # [batch_size, 1]
@@ -97,12 +105,17 @@ class Translator(object):
                     t.update()
         return decoded_sentences
 
-    def beam_decode(self, beam_width=5, num_sentences=3):
+    def beam_decode(self, beam_width, max_seq_len=100):
         """ 
         Perform Beam Search as a decoding procedure to get translations
+
         Arguments:
             beam_width: size of the beam
-            num_sentences: max number of `hypothesis` to complete before ending beam search
+            max_seq_len: The maximum sequence length of the translations
+
+        Returns: 
+            This method returns a list of all decoded translations in the dev set
+            using Beam Search
         """
         decoded_sentences = []
         self.model.eval()
@@ -121,21 +134,21 @@ class Translator(object):
                     encoder_output, encoder_final = self.model.encode(
                         src, src_mask, src_lengths)
 
+                    # transform the `encoder_final` if using GRU, otherwise `encoder_final` is None is using Transformer model
                     encoder_final = encoder_final[:self.model.decoder.num_layers] if self.params.model_type == "GRU" else None
 
                     if self.params.model_type == "GRU":
                         trg_mask = None
                         translation = beam_search_single(model=self.model, encoder_final=encoder_final, encoder_outputs=encoder_output,
                                                          src_mask=src_mask, beam_size=beam_width,
-                                                         alpha=1.0, params=self.params, max_seq_len=100)
+                                                         alpha=1.0, params=self.params, max_seq_len=max_seq_len)
                     else:
                         translation, _ = translate_batch(model=self.model, src_enc=encoder_output, src_mask=src_mask,
-                                                         beam_size=beam_width, alpha=0.0, params=self.params, max_seq_len=100)
+                                                         beam_size=beam_width, alpha=0.0, params=self.params, max_seq_len=max_seq_len)
 
                     # convert tensor of word indices to words
                     tokens = self.batch_reverse_tokenization(
                         translation.view(1, -1))
-                    print(tokens)
                     decoded_sentences.extend(tokens)
                     t.update()
         return decoded_sentences
@@ -143,14 +156,19 @@ class Translator(object):
     def batch_reverse_tokenization(self, batch):
         """
         Convert a batch of sequences of word IDs to words in a batch
+
         Arguments:
-            batch: a tensor containg the decoded examples (with word ids representing the sequence)
+            batch: a Tensor containg the decoded examples (with word ids representing the sequence)
+
+        Returns:
+            The `word` translations for each src sequence in the batch as a list, where each translation
+            is represented as a list of tokens
         """
         sentences = []
-        for example in batch:
+        for example in batch.tolist():
             sentence = []
             for token_id in example:
-                token_id = int(token_id.item())
+                token_id = int(token_id)
                 if token_id == self.params.eos_index:
                     break
                 sentence.append(self.params.itos[token_id])
@@ -160,9 +178,10 @@ class Translator(object):
     def output_decoded_translations(self, outputs, output_file):
         """
         Outputs a list of decoded translations to an output file
+
         Arguments:
             outputs: list of decoded sentences from the model (translations)
-            modeL_dir: directory of the `model`
+            model_dir: directory of the `model`
             output_file: name of the file to output the translations
         """
         filepath = os.path.join(

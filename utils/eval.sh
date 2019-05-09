@@ -9,10 +9,10 @@ echo "Reference File: " $ref_file
 echo "Translated File: " $translated_file
 
 # echo "Reversing BPE..."
-cat  $translated_file | sed -E 's/(\@\@ )|(\@\@ ?$)//g'  > {$translated_file}
+cat  $translated_file | sed -E 's/(\@\@ )|(\@\@ ?$)//g'  > "$translated_file.final"
 
 REFERENCE_FILE=$ref_file
-TRANSLATED_FILE=$translated_file
+TRANSLATED_FILE="$translated_file.final"
 
 # The model output is expected to be in a tokenized form. Note, that if you
 # tokenized your inputs to the model, then simply joined each output token with

@@ -13,7 +13,10 @@ class LabelSmoothingLoss(nn.Module):
     Why Label Smoothing? 
         A network is over confident when it places all probability on a `single class`
         in the training set. We want to prevent peaky distributions, which 
-        can lead to better generalizations by relaxing the confidence on the labels
+        can lead to better generalizations by relaxing the confidence on the labels. 
+        By confidence, we mean to not use one hot encoding (place 1.0 probability on the correct
+        next word in the sequence) but to use a more smoothed distribution. You still put most of the
+        probability mass on the correct next word, but also put small probability mass on all other words
     """
 
     def __init__(self, label_smoothing, tgt_vocab_size, pad_index):

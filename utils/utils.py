@@ -13,9 +13,13 @@ from torch.autograd import Variable
 def get_clones(module, N):
     """ 
     Produce N identical layers 
+
     Arguments:
         module: the module (layer) to repeat N times 
         N: number of identical layers
+
+    Returns:
+        A torch ModuleList that contains a `module` repeated N times
     """
     return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
 
@@ -27,7 +31,7 @@ def mask_invalid_positions(max_seq_len):
         max_seq_len: Maximum length of sequence in a batch 
 
     Returns:
-        an attention mask of size [seq_len, seq_len]
+        An attention mask of size [seq_len, seq_len]
     """
     attn_shape = (1, max_seq_len, max_seq_len)
     mask = np.triu(np.ones(attn_shape), k=1).astype("uint8")
@@ -39,53 +43,16 @@ def make_tgt_mask(tgt, tgt_pad):
     Make the mask for the target to hide padding and future words 
 
     Arguments:
-        :tgt: target sequence Tensor of shape [batch_size, seq_len]
+        tgt: target sequence Tensor of shape [batch_size, seq_len]
         tgt_pad: id of the padding token
 
     Returns:
-        a mask of size [batch_size, seq_len, seq_len] 
+        A mask of size [batch_size, seq_len, seq_len] 
     """
     tgt_mask = (tgt != tgt_pad).unsqueeze(-2)
     tgt_mask = tgt_mask & Variable(
         mask_invalid_positions(tgt.size(-1)).type_as(tgt_mask.data))
     return tgt_mask
-
-
-def save_checkpoint(state, is_best, checkpoint):
-    """
-    Save a checkpoint of the model
-
-    Arguments:
-        state: dictionary containing information related to the state of the training process
-        is_best: boolean value stating whether the current model got the best val loss
-        checkpoint: folder where parameters are to be saved
-    """
-    filepath = os.path.join(checkpoint, "last.pth.tar")
-    if not os.path.exists(checkpoint):
-        os.mkdir(checkpoint)
-    torch.save(state, filepath)
-    if is_best:
-        shutil.copyfile(filepath, os.path.join(checkpoint, "best.pth.tar"))
-
-
-def load_checkpoint(checkpoint, model, optimizer=None):
-    """
-    Loads model parameters (state_dict) from file_path. If optimizer is provided
-    loads state_dict of optimizer assuming it is present in checkpoint
-
-    Arguments:
-        checkpoint: filename which needs to be loaded
-        model: model for which the parametesr are loaded
-        optimizer: resume optimizer from checkpoint
-    """
-
-    if not os.path.exists(checkpoint):
-        raise ("File doesn't exist {}".format(checkpoint))
-    checkpoint = torch.load(checkpoint)
-    model.load_state_dict(checkpoint["state_dict"])
-    if optimizer:
-        optimizer.load_state_dict(checkpoint["optim_dict"])
-    return checkpoint
 
 
 def set_logger(log_path):
@@ -149,33 +116,3 @@ class HyperParams():
     def dict(self):
         """ Give dict-like access to Params """
         return self.__dict__
-
-
-def tile(x, count, dim):
-    """
-    Tiles x on dimension dim count times. From OpenNMT. Used for beam search.
-    :param x: tensor to tile
-    :param count: number of tiles
-    :param dim: dimension along which the tensor is tiled
-    :return: tiled tensor
-    """
-    if isinstance(x, tuple):
-        h, c = x
-        return tile(h, count, dim=dim), tile(c, count, dim=dim)
-
-    perm = list(range(len(x.size())))
-    if dim != 0:
-        perm[0], perm[dim] = perm[dim], perm[0]
-        x = x.permute(perm).contiguous()
-    out_size = list(x.size())
-    out_size[0] *= count
-    batch = x.size(0)
-    x = x.view(batch, -1) \
-        .transpose(0, 1) \
-        .repeat(count, 1) \
-        .transpose(0, 1) \
-        .contiguous() \
-        .view(*out_size)
-    if dim != 0:
-        x = x.permute(perm).contiguous()
-    return x

@@ -235,7 +235,8 @@ class Trainer(object):
             batch: a tensor containg the decoded examples(with word ids representing the sequence)
 
         Returns:
-            A list of decoded translations
+            The `word` translations for each src sequence in the batch as a list, where each translation
+            is represented as a list of tokens
         """
         sentences = []
         for example in batch.tolist():
