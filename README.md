@@ -35,6 +35,9 @@ So, I'll talk about musical composition, even though I don't know where to start
 | Dev     | 7883                |
 | Test    | 2762                |
 
+Note: The link above for the **IWSLT-16** DE-EN contains only the Train & Dev sets. Inorder to get the Test set, we download it using the following [link](https://piazza.com/class_profile/get_resource/jr6ue6jamzn5e7/jv6umkzpzbl647)
+
+
 ## Preprocessing
 Instead of batching by number of sentences, we batch instead by the number of tokens, such that we can most efficiently use the GPU resources (pack each batch as much as possible). We also tokenize the sentences using **Moses Tokenizer** (`./utils/tokenizer/tokenizer.perl`), and encode sentences using **Byte-Pair Encoding** with 32K merge operations, which has a **shared source-target vocabulary** of ~30,000 tokens. 
 
