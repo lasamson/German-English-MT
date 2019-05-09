@@ -167,11 +167,11 @@ Lastly, we also experimented with **Boosting** (Zhang et. al) our dataset, by du
 2 layer GRU with 512 hidden units using Bahdanau attentional mechanism 
 
 **Additional Information**:
-The hardness of a data point is calculated using the average perplexity of the sentence. Intuitively, it makes sense that an example with high perplexity is difficult for the model to classify, and thus the model should spend more time on it. Additionally, we ran the boosted model for only 10 epochs, and compared it with the regular model to see if there were any noticeable differences between the two.
+The hardness of a data point is calculated using the average perplexity of the sentence. Intuitively, it makes sense that an example with high perplexity is difficult for the model to classify, and thus the model should spend more time on it. 
 
 **Transformer Hyperparameters**:
 ```
-epochs=10 
+epochs=50 
 min_freq=1
 train_batch_size=4096
 dev_batch_size=1
