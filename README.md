@@ -197,7 +197,7 @@ model_type=GRU
 
 
 # Training & Evaluating
-Training and Evaluating models is simply done by making use of the `./scripts/train_eval.sh` script. The script takes in two arguments: first is the **configuration file** (shell script) which should be located in the `./configs/` folder and a **experiment name**. An example of training our transformer with our configurations located at `./configs/transformer_final.sh` and the experiment name `transformer` can be done with this command:
+Training and Evaluating models is simply done by making use of the `./scripts/train_eval.sh` script. The script takes in two arguments: first is the **configuration file** (shell script) which should be located in the `./configs/` folder and a **experiment name**. An example of training & evaluating our transformer with our configurations located at `./configs/transformer_final.sh` and the experiment name `transformer` can be done with this command:
 
 ```
 ./scripts/train_eval.sh ./configs/transformer_final.sh transformer
@@ -228,6 +228,19 @@ This will create a new folder in the `./experiments/` folder with the name `tran
 │
 ```
 
+**Note**: if you already have a trained model in a `./experiments/exp_name/checkpoints` folder, you can you evaluate a model by simply calling the `translate.py` script:
+
+```
+python evaluate.py -data_path="./data/iwslt/bpe/" -model_dir="./exeriments/{exp_name}/" -model_file="{model_file}" -beam_size={beam_size}
+```
+
+This script assumes that the `model_file` is in the `./experiments/exp_name/checkpoints` folder. If you however want to average the last **n** checkpoints for evaluation, 
+you can forgo the `-model_file` argument and use the `-average` argument instead. This is done in the following manner:
+
+```
+python evaluate.py -data_path="./data/iwslt/bpe/" -model_dir="./exeriments/{exp_name}/" -average={n} -beam_size={beam_size}
+```
+
 ## Description of Hyperparameters
 
 | Hyperparameter             | Description                                                                                                                                           |
@@ -254,7 +267,10 @@ This will create a new folder in the `./experiments/` folder with the name `tran
 | emb_src_tgt_weight_sharing | Whether to tie the weights of the encoding embedding layer and the decoder embedding layer                                                            |
 | boost_percent              | Percentage of hardest examples to duplicate                                                                                                           |
 | boost_warmup               | How many epochs to go without boosting before starting to boost                                                                                       |
-| boost                      | Wheter or not to boost the model                                                                                                                      |
+| boost                      | Whether or not to boost the model                                                                                                                     |
+| beam_size                  | Size of the beam search                                                                                                                               |
+| average                    | Number of checkpoints to average for evaluation                                                                                                       |
+
 
 ## Hardware
 All of our models were trained on a single 1080Ti GPU.
