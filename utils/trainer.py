@@ -158,10 +158,17 @@ class Trainer(object):
             example_to_perplexity.items(), key=lambda kv: kv[1], reverse=True)
         slice_index = int(boost_percent * len(sorted_examples))
         new_examples = sorted_examples[:slice_index]
-        with open('hardex.txt', 'w+') as f:
-            for line in new_examples[:20]:
-                f.write(line)
-            f.write('\n')
+        
+        print('TOP 10 HARD')
+        for line in sorted_examples[:10]:
+            print('German: {}'.format(' '.join(line[0][0])))
+            print('English: {}'.format(' '.join(line[0][1])))
+        print()
+        print('TOP 10 EASY')
+        for line in sorted_examples[-10:]:
+            print('German: {}'.format(' '.join(line[0][0])))
+            print('English: {}'.format(' '.join(line[0][1])))
+        print()
 
         return new_examples
 
