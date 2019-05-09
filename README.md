@@ -35,7 +35,7 @@ So, I'll talk about musical composition, even though I don't know where to start
 | Dev     | 7883                |
 | Test    | 2762                |
 
-Note: The link above for the **IWSLT-16** DE-EN contains only the Train & Dev sets. Inorder to get the Test set, we download it using the following [link](https://piazza.com/class_profile/get_resource/jr6ue6jamzn5e7/jv6umkzpzbl647)
+Note: The link above for the **IWSLT-16** DE-EN contains only the Train & Dev sets. The Test set can be downloaded with the following [link](https://piazza.com/class_profile/get_resource/jr6ue6jamzn5e7/jv6umkzpzbl647)
 
 
 ## Preprocessing
