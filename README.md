@@ -31,7 +31,7 @@ English: So, I'll talk about musical composition, even though I don't know where
 | Dev     | 7883                |
 
 ## Preprocessing
-Instead of batching by number of sentences, we batch instead by the number of tokens, such that we can most efficiently use the GPU resources (pack each batch as much as possible). We also tokenize the sentences using **Moses Tokenizer**, and encode sentences using **Byte-Pair Encoding** with 32K merge operations, which has a **shared source-target vocabulary** of ~30,000 tokens. 
+Instead of batching by number of sentences, we batch instead by the number of tokens, such that we can most efficiently use the GPU resources (pack each batch as much as possible). We also tokenize the sentences using **Moses Tokenizer** (`./utils/tokenizer/tokenizer.perl`), and encode sentences using **Byte-Pair Encoding** with 32K merge operations, which has a **shared source-target vocabulary** of ~30,000 tokens. 
 
 We rename both the train files to `train.en` and `train.de` and rename the validation set to `dev.en` and `dev.en`. We place these files in a `./data/iwslt` folder. These files have to be placed in this manner since our preprocessing script will assume that the data files are located in this specific location. 
 
