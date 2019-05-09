@@ -6,14 +6,14 @@ To build a neural machine translation model to translate from German to English.
 **Motivation**:
 To overcome the language barrier and eventually improve communication channels for people worldwide. Translation between languages is of paramount importance in the modern age, in both academic and industrial settings alike.
 
-# Requirements
+## Requirements
 Before doing anything please install the requirements for this project using the following command: 
 
 ```
 pip install -r requirements.txt
 ```
 
-# Dataset
+## Dataset
 
 Bilingual (bitext) data from [**IWSLT-2016**](https://piazza.com/class_profile/get_resource/jr6ue6jamzn5e7/js50rtixawp4fg) DE-EN, which consists of approximately 200,000 parallel German-English sentence pairs. An example of a German-English sentence pair is illustrated below:	
 
@@ -38,7 +38,7 @@ So, I'll talk about musical composition, even though I don't know where to start
 Note: The link above for the **IWSLT-16** DE-EN contains only the Train & Dev sets. The Test set can be downloaded with the following [link](https://piazza.com/class_profile/get_resource/jr6ue6jamzn5e7/jv6umkzpzbl647)
 
 
-## Preprocessing
+### Preprocessing
 Instead of batching by number of sentences, we batch instead by the number of tokens, such that we can most efficiently use the GPU resources (pack each batch as much as possible). We also tokenize the sentences using **Moses Tokenizer** (`./utils/tokenizer/tokenizer.perl`), and encode sentences using **Byte-Pair Encoding** with 32K merge operations, which has a **shared source-target vocabulary** of ~30,000 tokens. 
 
 We rename both the train files to `train.en` and `train.de` and rename the validation set to `dev.en` and `dev.en`. We place these files in a `./data/iwslt` folder. These files have to be placed in this manner since our preprocessing script will assume that the data files are located in this specific location. 
@@ -83,8 +83,8 @@ folder
 │   
 ```
 
-# Models
-## Attentional GRU Model
+## Models
+### Attentional GRU Model
 
 The Attentional GRU uses a Gated Recurrent Unit (GRU) as the 
 Encoder and the Decoder of the Seq2Seq model. We use **Bahdanau** attention to compute context vectors between the decoder hidden state and all encoder hidden states. 
@@ -120,7 +120,7 @@ tgt_emb_prj_weight_sharing=True
 emb_src_tgt_weight_sharing=True
 ```
 
-## Transformer Model
+### Transformer Model
 
 We also experiment with a Transformer Encoder-Decoder Architecture that uses a self-attention mechanism to compute representations. We use base model described the **Attention is all you Need** (Vaswani et. al) paper but with slightly modified parameters.
 
@@ -157,7 +157,7 @@ tgt_emb_prj_weight_sharing=True
 emb_src_tgt_weight_sharing=True
 ```
 
-## Boosted GRU
+### Boosted GRU
 Lastly, we also experimented with **Boosting** (Zhang et. al) our dataset, by duplicating 10% of the hardest examples in the dataset for each epoch. The intuition behind this idea is that for any problem, some data points are harder to learn than others. However, during training, models treat each data point equally. Thus, it makes sense to make the model spend more time on harder training examples instead, and this is achieved by duplicating hard examples.
 
 **Encoder**:
@@ -196,7 +196,7 @@ model_type=GRU
 
 
 
-# Training & Evaluating
+## Training & Evaluating
 Training and Evaluating models is simply done by making use of the `./scripts/train_eval.sh` script. The script takes in two arguments: first is the **configuration file** (shell script) which should be located in the `./configs/` folder and a **experiment name**. An example of training & evaluating our transformer with our configurations located at `./configs/transformer_final.sh` and the experiment name `transformer` can be done with this command:
 
 ```
@@ -247,7 +247,7 @@ python evaluate.py -data_path="./data/iwslt/bpe/"
                    -beam_size={beam_size}
 ```
 
-## Description of Hyperparameters
+### Description of Hyperparameters
 
 | Hyperparameter             | Description                                                                                                                                           |
 | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -278,15 +278,15 @@ python evaluate.py -data_path="./data/iwslt/bpe/"
 | average                    | Number of checkpoints to average for evaluation                                                                                                       |
 
 
-## Hardware
+### Hardware
 All of our models were trained on a single 1080Ti GPU.
 
-## Using Tensorboard
+### Using Tensorboard
 The training process for all experiments can be visualized with Tensorboard. In order to run Tensorboard to visualize all experiments, run `tensorboard -logdir=experiments/` in the root directory. This will create a new Tensorboard server and can be visualized using **localhost** with the port (default is port 6006) specified by Tensorboard.
 
-# Results
+## Results
 
-## BLEU scores on the Dev Set
+### BLEU scores on the Dev Set
 
 | Model                         | Greedy Decoding | Beam Search         |
 | ----------------------------- | --------------- | ------------------- |
@@ -294,7 +294,7 @@ The training process for all experiments can be visualized with Tensorboard. In 
 | Transformer                   | 34.0            | 34.5 (beam_size=5)  |
 | Boosted GRU                   |                 |                     |
 
-# Things to make note of
+## Things to make note of
 
 - Batching by the number of tokens
 - Beam Search
