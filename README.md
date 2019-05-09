@@ -32,6 +32,18 @@ Inorder to preprocess the **original** IWSLT-16 DE-EN dataset with Moses Tokeniz
 ./scripts/tokenize_and_preprocess_bpe.sh
 ```
 
+An example of an original sequence and a sequence applied with BPE is given below:
+
+**Original Sequence**: 
+```
+David Gallo : This is Bill Lange . I 'm Dave Gallo .
+```
+
+**Sequence applied with BPE**:
+```
+David Gallo : This is Bill Lange . I 'm Dave Gallo .
+```
+
 Apply this script, will give you two new folders, namely: **/bpe** and **/tok**
 
 # Models
