@@ -51,7 +51,7 @@ def get_last_n_checkpoints(model_dir, n):
     checkpoint_dir = model_dir + "checkpoints/"
 
     checkpoint_files = [x for x in glob.glob(
-        checkpoint_dir + "*") if os.path.isfile(x)]
+        checkpoint_dir + "*") if os.path.isfile(x) and "best" not in x]
     checkpoint_files.sort(key=os.path.getmtime)
 
     return checkpoint_files[-n:]
