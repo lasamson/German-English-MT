@@ -19,7 +19,8 @@ In order to reproduce our results, please follow the instructions below:
 
 1. Clone this repo `git clone https://github.com/lasamson/German-English-MT`
 2. [Download](https://piazza.com/class_profile/get_resource/jr6ue6jamzn5e7/js50rtixawp4fg) the training and dev data. Make a new `./data/iwslt/` folder in the root directory and place all train and dev files there. 
-3. Preprocess and apply BPE to the original dataset: `./scripts/tokenize_and_preprocess_bpe.sh`
+3. [Download](https://umass.box.com/s/jjb74su5o77vkfuhnjgv487j8nyn9m20) the BPE vocab and place it in the `./data/iswlt/` folder
+3. Preprocess and apply BPE to the original dataset using the `bpe.32000` vocab file: `./scripts/tokenize_and_preprocess_bpe.sh ./data/iwslt/bpe.32000`
 4. Train and Evaluate our models by using the following script: `./scripts/train_eval.sh {config_file} {exp_name}`, where **config_file** is the location of a model configuraion file located in `./configs/` and **exp_name** is an experiment name. An example of training our Transformer model is in the [Training & Evaluating](#training-and-evaluating) Section
 
 
@@ -108,7 +109,7 @@ Encoder and the Decoder of the Seq2Seq model. We use **Bahdanau** attention to c
 **Additional Information**:
 Since the dataset is relatively small, in order to regularize our model we apply dropout (Variational, Embedding Dropout, Weight Dropout) to various areas of the architecture. Since we are using a shared vocab, we can also tie the weights for both the Encoder/Decoder Embedding layers and also the softmax layer. This also regularizes the model by reducing the number of parameters.
 
-**GRU Attention Hyperparamers**:
+**GRU Attention [Hyperparamers](#description-of-hyperparameters)**:
 
 ```
 epochs=50
@@ -141,7 +142,7 @@ We also experiment with a Transformer Encoder-Decoder Architecture that uses a s
 We apply dropout to various places within the architecture and use label smoothing and same learning rate decay described in the paper.
 
 
-**Transformer Hyperparameters**:
+**Transformer [Hyperparameters](#description-of-hyperparameters)**:
 
 ```
 epochs=20
@@ -179,7 +180,7 @@ Lastly, we also experimented with **Boosting** (Zhang et. al) our dataset, by du
 **Additional Information**:
 The hardness of a data point is calculated using the average perplexity of the sentence. Intuitively, it makes sense that an example with high perplexity is difficult for the model to classify, and thus the model should spend more time on it. 
 
-**Transformer Hyperparameters**:
+**Boosted GRU [Hyperparameters](#description-of-hyperparameters)**:
 ```
 epochs=50 
 min_freq=1
