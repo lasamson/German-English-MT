@@ -14,12 +14,12 @@ import logging
 from utils.trainer import Trainer
 from utils.translator import Translator
 from utils.data_loader import load_dataset
-from utils.utils import HyperParams, load_checkpoint
+from utils.utils import HyperParams
 from utils.average_models import average_checkpoints
 from models.seq2seq import make_seq2seq_model
 
 
-def main(params, greedy, beam_size):
+def main(params, greedy, beam_size, test):
     """
     The main function for decoding a trained MT model
     Arguments:
@@ -28,16 +28,16 @@ def main(params, greedy, beam_size):
         beam_size: size of beam if doing beam search
     """
     print("Loading dataset...")
-    _, dev_iter, DE, EN = load_dataset(
+    _, dev_iter, test_iterator, DE, EN = load_dataset(
         params.data_path, params.train_batch_size, params.dev_batch_size)
     de_size, en_size = len(DE.vocab), len(EN.vocab)
     print("[DE Vocab Size: ]: {}, [EN Vocab Size]: {}".format(de_size, en_size))
 
     params.src_vocab_size = de_size
     params.tgt_vocab_size = en_size
+    params.sos_index = EN.vocab.stoi["<s>"]
     params.pad_token = EN.vocab.stoi["<pad>"]
     params.eos_index = EN.vocab.stoi["</s>"]
-    params.sos_index = EN.vocab.stoi["<s>"]
     params.itos = EN.vocab.itos
 
     device = torch.device('cuda' if params.cuda else 'cpu')
@@ -51,13 +51,23 @@ def main(params, greedy, beam_size):
         print("Averaging the last {} checkpoints".format(params.average))
         checkpoint = {}
         checkpoint["state_dict"] = average_checkpoints(
-            args.model_dir, params.average)
+            params.model_dir, params.average)
         model = Trainer.load_checkpoint(model, checkpoint)
     else:
         model_path = os.path.join(
-            args.model_dir + "checkpoints/", params.model_file)
+            params.model_dir + "checkpoints/", params.model_file)
         print("Restoring parameters from {}".format(model_path))
         model = Trainer.load_checkpoint(model, model_path)
+
+    # evaluate on the test set
+    if test:
+        print("Doing Beam Search on the Test Set")
+        test_decoder = Translator(model, test_iterator, params, device)
+        test_beam_search_outputs = test_decoder.beam_decode(
+            beam_width=beam_size)
+        test_decoder.output_decoded_translations(
+            test_beam_search_outputs, "beam_search_outputs_size_test={}.en".format(beam_size))
+        return
 
     # instantiate a Translator object to translate SRC langauge to TRG language using Greedy/Beam Decoding
     decoder = Translator(model, dev_iter, params, device)
@@ -74,8 +84,7 @@ def main(params, greedy, beam_size):
 
     if beam_size:
         print("Doing Beam Search...")
-        beam_search_outputs = decoder.beam_decode(
-            beam_width=beam_size, num_sentences=5)
+        beam_search_outputs = decoder.beam_decode(beam_width=beam_size)
         decoder.output_decoded_translations(
             beam_search_outputs, "beam_search_outputs_size={}.en".format(beam_size))
 
@@ -97,6 +106,8 @@ if __name__ == "__main__":
                    help="Beam Search on outputs")
     p.add_argument("-average", type=int, default=0,
                    help="Average the weight of the last n checkpoints")
+    p.add_argument("-test", action="store_true",
+                   help="evaluate on the test set")
     args = p.parse_args()
 
     json_params_path = os.path.join(args.model_dir, "params.json")
@@ -109,4 +120,4 @@ if __name__ == "__main__":
     params.model_file = args.model_file
     params.average = args.average
     params.cuda = torch.cuda.is_available()
-    main(params, args.greedy, args.beam_size)
+    main(params, args.greedy, args.beam_size, args.test)
