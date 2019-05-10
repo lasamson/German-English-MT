@@ -6,7 +6,14 @@ import json
 
 
 def write_params(args, dir_name, model2args):
-    """ Write params into a params.json file """
+    """ 
+    Write params into a params.json file 
+
+    Arguments:
+        args: the arguments from ArgumentParser 
+        dir_name: name of the experiment directory to create
+        model2args: a dictionary containing the arguments that apply to a specific model
+    """
     model_type = getattr(args, 'model_type')
     params = {key: value for key, value in vars(
         args).items() if key in model2args[model_type]}
