@@ -19,7 +19,7 @@ In order to reproduce our results, please follow the instructions below:
 
 1. Clone this repo `git clone https://github.com/lasamson/German-English-MT`
 2. Install the requirements with `pip install -r requirements.txt`
-3. [Download](https://piazza.com/class_profile/get_resource/jr6ue6jamzn5e7/js50rtixawp4fg) the training and dev data. Make a new `./data/iwslt/` folder in the root directory and place all train and dev files there. 
+3. [Download](https://umass.box.com/s/zj1sdx2xx3ihfegpk5sve1zh7ihsn3ia) the training and dev data. Make a new `./data/iwslt/` folder in the root directory and place all train and dev files there. 
 4. [Download](https://umass.box.com/s/jjb74su5o77vkfuhnjgv487j8nyn9m20) the BPE vocab and place it in the `./data/iswlt/` folder
 5. Preprocess and apply BPE to the original dataset using the `bpe.32000` vocab file: `./scripts/tokenize_and_preprocess_bpe.sh ./data/iwslt/bpe.32000`
 6. Train and Evaluate our models by using the following script: `./scripts/train_eval.sh {config_file} {exp_name}`, where **config_file** is the location of a model configuraion file located in `./configs/` and **exp_name** is an experiment name. An example of training our Transformer model is in the [Training & Evaluating](#training-and-evaluating) Section
@@ -27,7 +27,7 @@ In order to reproduce our results, please follow the instructions below:
 
 ## Dataset
 
-Bilingual (bitext) data from [**IWSLT-2016**](https://piazza.com/class_profile/get_resource/jr6ue6jamzn5e7/js50rtixawp4fg) DE-EN, which consists of approximately 200,000 parallel German-English sentence pairs. An example of a German-English sentence pair is illustrated below:	
+Bilingual (bitext) data from [**IWSLT-2016**](https://umass.box.com/s/zj1sdx2xx3ihfegpk5sve1zh7ihsn3ia) DE-EN, which consists of approximately 200,000 parallel German-English sentence pairs. An example of a German-English sentence pair is illustrated below:	
 
 German:
 ```
