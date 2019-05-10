@@ -307,10 +307,3 @@ The training process for all experiments can be visualized with Tensorboard. In 
 | Seq2Seq w/ Bahdanau Attention | 31.6            | 33.0 (beam size=10) |
 | Transformer                   | 34.0            | 34.2 (beam_size=5)  |
 | Boosted Seq2Seq               | 31.4            | 32.8 (beam_size=10) |
-
-## Things to make note of
-
-- Batching by the number of tokens
-- Beam Search
-- GPU (1080Ti)
--
