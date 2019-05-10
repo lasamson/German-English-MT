@@ -89,12 +89,17 @@ def load_dataset(data_path, train_batch_size=4096, dev_batch_size=1, max_len=100
     dev_data = datasets.TranslationDataset(
         exts=("dev.de", "dev.en"), fields=(SRC, TRG), path=data_path)
 
-    test_data = data.TranslationDataset(
-        exts=("test.de"), fields=(SRC), path=data_path)
+    # load in the Test Set
+    test_examples = []
+    with open(data_path + "test.de", "r") as f:
+        for test_example in f.readlines():
+            example = data.Example()
+            setattr(example, "src", test_example.split())
+            test_examples.append(example)
 
-    print(test_data)
+    test_data = data.Dataset(test_examples, fields=[("src", SRC)])
 
-    # build the vocab using the training data
+    # build he vocab using the training data
     SRC.build_vocab(train_data.src, train_data.trg)
     TRG.build_vocab(train_data.src, train_data.trg)
 
@@ -114,4 +119,9 @@ def load_dataset(data_path, train_batch_size=4096, dev_batch_size=1, max_len=100
     dev_iterator = Iterator(dev_data, batch_size=dev_batch_size,
                             train=False, sort=False, repeat=False, device=device)
 
-    return train_iterator, dev_iterator, SRC, TRG
+    # create Test Iterator for the test data
+    test_iterator = Iterator(
+        test_data, batch_size=1, train=False, sort=False, repeat=False, device=device)
+
+    print(len(test_iterator))
+    return train_iterator, dev_iterator, test_iterator, SRC, TRG
