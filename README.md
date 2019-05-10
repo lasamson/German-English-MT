@@ -84,6 +84,7 @@ folder
 │   │   dev.en 
 │   │   train.de
 │   │   train.en 
+│   │   32000.bpe 
 │   │
 │   └───bpe
 │       │   dev.de 
