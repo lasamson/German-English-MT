@@ -19,16 +19,8 @@ from tqdm import tqdm
 
 
 def main(params):
-    """
-    The main function for training the Seq2Seq model with Dot-Product Attention
-    Arguments:
-        params: hyperparameters for the model
-        model_dir: directory of the model
-        restore_file: restore file for the model
-    """
-
     logging.info("Loading the datasets...")
-    train_iter, dev_iter, DE, EN = load_dataset(
+    train_iter, dev_iter, test_iterator, DE, EN = load_dataset(
         params.data_path, params.train_batch_size, params.dev_batch_size)
     de_size, en_size = len(DE.vocab), len(EN.vocab)
     logging.info(
@@ -95,6 +87,7 @@ if __name__ == "__main__":
     json_params_path = os.path.join(args.model_dir, "params.json")
     assert os.path.isfile(
         json_params_path), "No json configuration file found at {}".format(json_params_path)
+
     params = HyperParams(json_params_path)
 
     # add extra information to the params dictionary related to the training of the model
