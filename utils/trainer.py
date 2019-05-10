@@ -158,7 +158,6 @@ class Trainer(object):
             example_to_perplexity.items(), key=lambda kv: kv[1], reverse=True)
         slice_index = int(boost_percent * len(sorted_examples))
         new_examples = sorted_examples[:slice_index]
-        
         print('TOP 10 HARD')
         for line in sorted_examples[:10]:
             print('German: {}'.format(' '.join(line[0][0])))
@@ -168,8 +167,7 @@ class Trainer(object):
         for line in sorted_examples[-10:]:
             print('German: {}'.format(' '.join(line[0][0])))
             print('English: {}'.format(' '.join(line[0][1])))
-        print()
-
+        print("\n")
         return new_examples
 
     def compute_perplexity_on_batch(self, output: torch.Tensor, target: torch.Tensor, batch_size: int, seq_len: int) -> List[float]:
@@ -457,9 +455,13 @@ class Trainer(object):
         state_dict = checkpoint["state_dict"]
 
         # this is for only GRUEncoders/GRUDecoders
+        # since the GRU models use WeightDrop
+        # and with weight drop we do some fancy
+        # maniuplation of the torch weights
         for key in list(state_dict.keys()):
             if key.endswith("weight_hh_l0"):
                 del state_dict[key]
+
         model.load_state_dict(checkpoint["state_dict"])
 
         if optimizer:
