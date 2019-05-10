@@ -18,7 +18,7 @@ pip install -r requirements.txt
 In order to reproduce our results, please follow the instructions below:
 
 1. Clone this repo `git clone https://github.com/lasamson/German-English-MT`
-2. Install the requirements with `pip install -r requirements.txt`
+2. Install the requirements with `pip install -r requirements.txt` (if this throws an error, please try to install the packages individually)
 3. [Download](https://umass.box.com/s/zj1sdx2xx3ihfegpk5sve1zh7ihsn3ia) the training and dev data. Make a new `./data/iwslt/` folder in the root directory and place all train and dev files there. 
 4. [Download](https://umass.box.com/s/jjb74su5o77vkfuhnjgv487j8nyn9m20) the BPE vocab and place it in the `./data/iswlt/` folder
 5. Preprocess and apply BPE to the original dataset using the `bpe.32000` vocab file: `./scripts/tokenize_and_preprocess_bpe.sh ./data/iwslt/bpe.32000`
