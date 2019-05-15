@@ -36,9 +36,6 @@ def main(params):
     params.SRC = DE
     params.TRG = EN
 
-    device = torch.device('cuda' if params.cuda else 'cpu')
-    params.device = device
-
     # make the Seq2Seq model
     model = make_seq2seq_model(params)
 
@@ -47,14 +44,14 @@ def main(params):
 
     if params.model_type == "Transformer":
         criterion = LabelSmoothingLoss(
-            params.label_smoothing, params.tgt_vocab_size, params.pad_token).to(device)
+            params.label_smoothing, params.tgt_vocab_size, params.pad_token).to(params.device)
         optimizer = ScheduledOptimizer(optimizer=optimizer, d_model=params.hidden_size,
                                        factor=2, n_warmup_steps=params.n_warmup_steps)
         scheduler = None
     else:
         criterion = nn.NLLLoss(reduction="sum", ignore_index=params.pad_token)
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, patience=3, factor=.1, verbose=True)
+            optimizer, patience=params.patience, factor=.1, verbose=True)
 
     # intialize the Trainer
     trainer = Trainer(model, optimizer, scheduler, criterion,
@@ -98,6 +95,9 @@ if __name__ == "__main__":
     # use GPU if available
     params.cuda = torch.cuda.is_available()
     logging.info("Using GPU: {}".format(params.cuda))
+
+    device = torch.device('cuda' if params.cuda else 'cpu')
+    params.device = device
 
     # manual seed for reproducing experiments
     torch.manual_seed(2)
