@@ -181,8 +181,10 @@ class Translator(object):
 
         Arguments:
             outputs: list of decoded sentences from the model (translations)
-            model_dir: directory of the `model`
             output_file: name of the file to output the translations
+
+        Returns:
+            None
         """
         filepath = os.path.join(
             self.params.model_dir + "/outputs/", output_file)
