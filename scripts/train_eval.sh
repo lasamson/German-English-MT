@@ -1,5 +1,13 @@
 # Script to train and evaluate Seq2Seq models (Attentional GRU and Transformer)
 
+# Make sure if the arguments were passed in
+if [[ $# -eq 0 ]] ; then
+    echo "Did not pass in the correct number of arguments"
+    echo "This is the correct way to run the script: ./scripts/train_eval.sh {config_file} {exp_name}"
+    exit 1
+fi
+
+
 # Data Folder
 data_path=./data/iwslt/bpe/
 
