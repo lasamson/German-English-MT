@@ -9,6 +9,13 @@ from utils.utils import make_tgt_mask
 class Beam():
     '''
     Class for managing the internals of the beam search process.
+
+    This class from OpenNMT's implementation
+
+    Parameters:
+        size: the size of the beam
+        alpha: length normalization strength
+        params: param related to the `model`
     '''
 
     def __init__(self, size, alpha, params):
@@ -305,6 +312,7 @@ def beam_search_single(model, encoder_final, encoder_outputs, src_mask, beam_siz
     Returns:
         The translation for the src sequence as a torch tensor
     """
+
     decoder_input = torch.ones(1, 1).fill_(
         params.sos_index).type(torch.LongTensor).to(params.device)
 
