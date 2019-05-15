@@ -306,3 +306,7 @@ The training process for all experiments can be visualized with Tensorboard. In 
 | Seq2Seq w/ Bahdanau Attention | 31.6            | 33.0 (beam size=10) |
 | Transformer                   | 34.0            | 34.2 (beam_size=5)  |
 | Boosted Seq2Seq               | 31.4            | 32.8 (beam_size=10) |
+
+
+## Report
+This was our final class project for **690D: Deep Learning for NLP**, taught at **UMass Amherst**. If you would like to see the report, please download this [link](). If you would like to see our poster, please download this [link]().
