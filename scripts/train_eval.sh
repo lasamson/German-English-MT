@@ -1,7 +1,6 @@
-# Setup some hyperparameters for the GRU Seq2Seq w/ Attention Baseline Model
-# Using these hyperparameters, should give you 33.0 BLEU score on the Dev Set
+# Script to train and evaluate Seq2Seq models (Attentional GRU and Transformer)
 
-# Data Folders
+# Data Folder
 data_path=./data/iwslt/bpe/
 
 # Load in the model config file
