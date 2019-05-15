@@ -12,7 +12,7 @@ class Beam():
 
     This class from OpenNMT's implementation
 
-    Parameters:
+    Arguments:
         size: the size of the beam
         alpha: length normalization strength
         params: param related to the `model`
