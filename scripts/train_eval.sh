@@ -6,8 +6,14 @@ data_path=./data/iwslt/bpe/
 # Load in the model config file
 model_config=$1
 source $model_config 
+
+# Experiment Name
 exp_name=$2
 
+# Make an ./experiments folder if it doesn't exist
+mkdir -p ./experiments
+
+# Using the exp_naem, create a model directory in the ./experiments folder
 model_dir="./experiments/"$exp_name"/"
 
 # run make_config.py to make the model folder
