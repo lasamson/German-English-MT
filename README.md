@@ -309,4 +309,4 @@ The training process for all experiments can be visualized with Tensorboard. In 
 
 
 ## Report
-This was our final class project for **690D: Deep Learning for NLP**, taught at **UMass Amherst**. If you would like to see the report, please download this [link](). If you would like to see our poster, please download this [link]().
+This was our final class project for **690D: Deep Learning for NLP**, taught at **UMass Amherst**. If you would like to see the report, please download this [link](https://umass.box.com/s/idnntuhs7cclglfglsl8iqhen6f6xn1n). If you would like to see our poster, please download this [link](https://umass.box.com/s/2attp95ytwnpch8ow4mz96twbsljkbtt).
